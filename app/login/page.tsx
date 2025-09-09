@@ -1,4 +1,6 @@
 "use client"
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useState } from 'react'
 
