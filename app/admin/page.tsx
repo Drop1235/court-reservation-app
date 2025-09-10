@@ -18,6 +18,9 @@ export default function AdminPage() {
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   const [settingCount, setSettingCount] = useState<number>(4)
   const [settingNames, setSettingNames] = useState<string[]>(['Court1', 'Court2', 'Court3', 'Court4'])
+  const [startMin, setStartMin] = useState<number>(9 * 60)
+  const [endMin, setEndMin] = useState<number>(21 * 60)
+  const [slotMinutes, setSlotMinutes] = useState<number>(30)
 
   // load PIN from sessionStorage
   useEffect(() => {
@@ -35,7 +38,11 @@ export default function AdminPage() {
     mutationFn: async (id: string) => (await axios.delete(`/api/admin/force-delete/${id}`, { headers: { 'x-admin-pin': pin } })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['all-res'] }),
     onError: (e: any) => {
-      alert(e?.response?.data?.error ?? '削除に失敗しました')
+      if (e?.response?.status === 401) {
+        alert('管理PINを入力してください')
+      } else {
+        alert(e?.response?.data?.error ?? '削除に失敗しました')
+      }
     },
   })
 
@@ -48,9 +55,15 @@ export default function AdminPage() {
         if (!s) {
           setSettingCount(4)
           setSettingNames(['Court1', 'Court2', 'Court3', 'Court4'])
+          setStartMin(9 * 60)
+          setEndMin(21 * 60)
+          setSlotMinutes(30)
         } else {
           setSettingCount(s.courtCount)
           setSettingNames(s.courtNames)
+          setStartMin(s.startMin ?? 9 * 60)
+          setEndMin(s.endMin ?? 21 * 60)
+          setSlotMinutes(s.slotMinutes ?? 30)
         }
       } catch (e) {
         alert('コート設定の読込に失敗しました')
@@ -68,13 +81,17 @@ export default function AdminPage() {
       const names = Array.from({ length: settingCount }, (_, i) => settingNames[i] || `Court${i + 1}`)
       await axios.post(
         '/api/admin/court-setting',
-        { date: settingDate, courtCount: settingCount, courtNames: names },
+        { date: settingDate, courtCount: settingCount, courtNames: names, startMin, endMin, slotMinutes },
         { headers: { 'x-admin-pin': pin } }
       )
       alert('保存しました')
       qc.invalidateQueries({ queryKey: ['reservations'] })
     } catch (e: any) {
-      alert(e?.response?.data?.error ?? '保存に失敗しました')
+      if (e?.response?.status === 401) {
+        alert('管理PINを入力してください')
+      } else {
+        alert(e?.response?.data?.error ?? '保存に失敗しました')
+      }
     }
   }
 
@@ -117,7 +134,7 @@ export default function AdminPage() {
               </button>
             </div>
           </div>
-          <div className="grid gap-2 border-b p-3 sm:grid-cols-2">
+          <div className="grid gap-4 border-b p-3 sm:grid-cols-2">
             <div className="space-y-1">
               <div className="text-sm font-medium">コート設定（管理者のみ）</div>
               <div className="flex items-center gap-2">
@@ -156,6 +173,43 @@ export default function AdminPage() {
               <div>
                 <button type="button" className="mt-1 rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700" onClick={saveSetting}>保存</button>
               </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">時間設定</div>
+              <div className="grid grid-cols-3 items-center gap-2 text-sm">
+                <label className="text-xs text-gray-600">開始</label>
+                <input
+                  className="col-span-2 rounded border px-2 py-1"
+                  type="time"
+                  step={300}
+                  value={`${String(Math.floor(startMin/60)).padStart(2,'0')}:${String(startMin%60).padStart(2,'0')}`}
+                  onChange={(e) => {
+                    const [h,m] = e.target.value.split(':').map(Number)
+                    setStartMin(h*60+m)
+                  }}
+                />
+                <label className="text-xs text-gray-600">終了</label>
+                <input
+                  className="col-span-2 rounded border px-2 py-1"
+                  type="time"
+                  step={300}
+                  value={`${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`}
+                  onChange={(e) => {
+                    const [h,m] = e.target.value.split(':').map(Number)
+                    setEndMin(h*60+m)
+                  }}
+                />
+                <label className="text-xs text-gray-600">枠（分）</label>
+                <input
+                  className="col-span-2 rounded border px-2 py-1"
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={slotMinutes}
+                  onChange={(e) => setSlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))}
+                />
+              </div>
+              <p className="text-xs text-gray-500">5分単位。開始＜終了、かつ（終了-開始）は枠分数で割り切れるようにしてください。</p>
             </div>
           </div>
           <div className="overflow-auto">

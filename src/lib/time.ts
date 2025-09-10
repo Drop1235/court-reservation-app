@@ -27,6 +27,19 @@ export function halfHourSlots9to21() {
   return slots
 }
 
+export function makeSlots(startMin: number, endMin: number, slotMinutes: number) {
+  // Generate [start,end) slots in `slotMinutes` increments
+  const slots: { start: number; end: number }[] = []
+  for (let s = startMin; s + slotMinutes <= endMin; s += slotMinutes) {
+    slots.push({ start: s, end: s + slotMinutes })
+  }
+  return slots
+}
+
+export const DEFAULT_START_MIN = 9 * 60
+export const DEFAULT_END_MIN = 21 * 60
+export const DEFAULT_SLOT_MINUTES = 30
+
 export function assertServerReservationValidity(startMin: number, endMin: number, partySize: number) {
   if (!isFiveMinuteAligned(startMin) || !isFiveMinuteAligned(endMin)) {
     throw new Error('Time must be aligned to 5-minute increments')

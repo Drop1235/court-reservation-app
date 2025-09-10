@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useMemo, useState, Fragment } from 'react'
+import { makeSlots, DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN } from '@/src/lib/time'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { halfHourSlots9to21 } from '@/src/lib/time'
@@ -16,6 +17,9 @@ export default function ReservePage() {
   const [playerNames, setPlayerNames] = useState<string[]>([''])
   const [courtCount, setCourtCount] = useState<number>(DEFAULT_COURT_COUNT)
   const [courtNames, setCourtNames] = useState<string[]>(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
+  const [startMin, setStartMin] = useState<number>(DEFAULT_START_MIN)
+  const [endMin, setEndMin] = useState<number>(DEFAULT_END_MIN)
+  const [slotMinutes, setSlotMinutes] = useState<number>(DEFAULT_SLOT_MINUTES)
 
   // client-only render guard to avoid hydration mismatch
   const [mounted, setMounted] = useState(false)
@@ -32,13 +36,25 @@ export default function ReservePage() {
           setCourtCount(cnt)
           const names = data.courtNames.slice(0, cnt)
           setCourtNames(names.length === cnt ? names : Array.from({ length: cnt }, (_, i) => names[i] || `Court${i + 1}`))
+          if (typeof data.startMin === 'number') setStartMin(data.startMin)
+          else setStartMin(DEFAULT_START_MIN)
+          if (typeof data.endMin === 'number') setEndMin(data.endMin)
+          else setEndMin(DEFAULT_END_MIN)
+          if (typeof data.slotMinutes === 'number') setSlotMinutes(data.slotMinutes)
+          else setSlotMinutes(DEFAULT_SLOT_MINUTES)
         } else {
           setCourtCount(DEFAULT_COURT_COUNT)
           setCourtNames(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
+          setStartMin(DEFAULT_START_MIN)
+          setEndMin(DEFAULT_END_MIN)
+          setSlotMinutes(DEFAULT_SLOT_MINUTES)
         }
       } catch {
         setCourtCount(DEFAULT_COURT_COUNT)
         setCourtNames(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
+        setStartMin(DEFAULT_START_MIN)
+        setEndMin(DEFAULT_END_MIN)
+        setSlotMinutes(DEFAULT_SLOT_MINUTES)
       }
     })()
   }, [date])
@@ -50,7 +66,7 @@ export default function ReservePage() {
 
   // removed: localStorage editors (now admin-only)
 
-  const slots = useMemo(() => halfHourSlots9to21(), [])
+  const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
 
   const { data: reservations } = useQuery({
     queryKey: ['reservations', date],

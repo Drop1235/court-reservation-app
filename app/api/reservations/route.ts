@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { prisma } from '@/src/lib/prisma'
 import { requireUser } from '@/src/lib/auth'
 import { assertServerReservationValidity, overlaps } from '@/src/lib/time'
