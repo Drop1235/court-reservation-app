@@ -1,9 +1,10 @@
+export const runtime = 'nodejs'
 import { prisma } from '@/src/lib/prisma'
 import { NextResponse } from 'next/server'
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const pin = req.headers.get('x-admin-pin') || ''
+    const pin = _req.headers.get('x-admin-pin') || ''
     const expected = process.env.ADMIN_PIN || ''
     if (!expected || pin !== expected) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

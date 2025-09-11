@@ -16,6 +16,7 @@ export default function AdminPage() {
   const [q, setQ] = useState('')
   const [pin, setPin] = useState('')
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [bulkCutoff, setBulkCutoff] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
   const [settingCount, setSettingCount] = useState<number>(4)
   const [settingNames, setSettingNames] = useState<string[]>(['Court1', 'Court2', 'Court3', 'Court4'])
   const [startMin, setStartMin] = useState<number>(9 * 60)
@@ -107,6 +108,25 @@ export default function AdminPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
+          <div className="hidden sm:flex items-center gap-1 text-xs">
+            <label className="text-gray-600">過去予約一括削除の基準日</label>
+            <input type="date" className="rounded border px-2 py-1" value={bulkCutoff} onChange={(e)=>setBulkCutoff(e.target.value)} />
+            <button
+              type="button"
+              className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700"
+              onClick={async ()=>{
+                if (!confirm(`${bulkCutoff} より前の予約をすべて削除します。よろしいですか？`)) return
+                try {
+                  const res = await axios.post('/api/admin/bulk-delete-past', { before: bulkCutoff + 'T00:00:00.000Z' }, { headers: { 'x-admin-pin': pin } })
+                  alert(`削除件数: ${res.data.deleted}`)
+                  qc.invalidateQueries({ queryKey: ['all-res'] })
+                } catch (e: any) {
+                  if (e?.response?.status === 401) alert('管理PINを入力してください')
+                  else alert(e?.response?.data?.error ?? '一括削除に失敗しました')
+                }
+              }}
+            >過去予約を一括削除</button>
+          </div>
           <div className="text-xs text-gray-500">{data?.length ?? 0} 件</div>
         </div>
       </div>

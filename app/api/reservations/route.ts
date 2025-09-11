@@ -5,23 +5,27 @@ import { assertServerReservationValidity, overlaps } from '@/src/lib/time'
 import { NextResponse } from 'next/server'
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const date = searchParams.get('date') // yyyy-mm-dd
-  const courtId = searchParams.get('courtId')
+  try {
+    const { searchParams } = new URL(req.url)
+    const date = searchParams.get('date') // yyyy-mm-dd
+    const courtId = searchParams.get('courtId')
 
-  // If date provided: filter by day (and optional court)
-  if (date) {
-    const startOfDay = new Date(date + 'T00:00:00.000Z')
-    const endOfDay = new Date(date + 'T23:59:59.999Z')
-    const where: any = { date: { gte: startOfDay, lte: endOfDay } }
-    if (courtId) where.courtId = Number(courtId)
-    const reservations = await prisma.reservation.findMany({ where })
+    // If date provided: filter by day (and optional court)
+    if (date) {
+      const startOfDay = new Date(date + 'T00:00:00.000Z')
+      const endOfDay = new Date(date + 'T23:59:59.999Z')
+      const where: any = { date: { gte: startOfDay, lte: endOfDay } }
+      if (courtId) where.courtId = Number(courtId)
+      const reservations = await prisma.reservation.findMany({ where })
+      return NextResponse.json(reservations)
+    }
+
+    // If no date provided: return all reservations publicly (no auth)
+    const reservations = await prisma.reservation.findMany({})
     return NextResponse.json(reservations)
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Failed to fetch reservations' }, { status: 400 })
   }
-
-  // If no date provided: return all reservations publicly (no auth)
-  const reservations = await prisma.reservation.findMany({})
-  return NextResponse.json(reservations)
 }
 
 export async function POST(req: Request) {
@@ -32,12 +36,17 @@ export async function POST(req: Request) {
       const user = await requireUser()
       userId = user.id
     } catch {
-      const guest = await prisma.user.upsert({
-        where: { email: 'user@example.com' },
-        create: { email: 'user@example.com' },
-        update: {},
-      })
-      userId = guest.id
+      // Avoid upsert to minimize prepared statement conflicts under pgBouncer
+      let guest = await prisma.user.findFirst({ where: { email: 'user@example.com' } })
+      if (!guest) {
+        try {
+          guest = await prisma.user.create({ data: { email: 'user@example.com' } })
+        } catch (err: any) {
+          // If a race created the user concurrently, fetch again
+          guest = await prisma.user.findFirst({ where: { email: 'user@example.com' } })
+        }
+      }
+      userId = guest!.id
     }
     const body = await req.json()
     const { courtId, date, startMin, endMin, partySize, playerNames } = body as {
@@ -72,17 +81,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Capacity exceeded for this time slot' }, { status: 400 })
     }
 
-    const created = await prisma.reservation.create({
-      data: {
-        userId,
-        courtId,
-        date: dayStart,
-        startMin,
-        endMin,
-        partySize,
-        playerNames: cleaned,
-      },
-    })
+    async function createOnce() {
+      return await prisma.reservation.create({
+        data: {
+          userId,
+          courtId,
+          date: dayStart,
+          startMin,
+          endMin,
+          partySize,
+          playerNames: cleaned,
+        },
+      })
+    }
+    let created
+    try {
+      created = await createOnce()
+    } catch (err: any) {
+      // One-time retry in case of transient pgBouncer/prepared statement issues
+      await new Promise((r) => setTimeout(r, 50))
+      created = await createOnce()
+    }
 
     return NextResponse.json(created)
   } catch (e: any) {
