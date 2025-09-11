@@ -71,6 +71,8 @@ export default function ReservePage() {
   const { data: reservations } = useQuery({
     queryKey: ['reservations', date],
     queryFn: async () => (await axios.get(`/api/reservations?date=${date}`)).data,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   const usedCapacity = (start: number, end: number, courtId: number) => {
