@@ -131,9 +131,14 @@ export default function ReservePage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800">
-        キャンセルする場合は、必ず以下までお電話ください<br />
-        　TEL：050-6860-6312
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
+        <p className="mb-1">予約はお一人様1枠までとなります。</p>
+        <p className="mb-1">複数枠のご予約は禁止です。2枠以上の予約が確認された場合は、管理側で削除いたします。</p>
+        <p className="mb-1">大会に参加する選手の方は <span className="font-bold">フルネーム</span> を入力してください。</p>
+        <p className="mb-1">選手以外（＝練習相手）の方は <span className="font-bold">「コーチ」</span> と入力をお願いします。</p>
+        <p className="mb-1">予約をキャンセルする場合は、必ず下記までお電話ください。</p>
+        <p className="mt-2 font-bold">TEL：050-7118-5600</p>
       </div>
       <div>
         <h1 className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-xl font-bold text-transparent">予約</h1>
@@ -208,9 +213,14 @@ export default function ReservePage() {
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-4 sm:place-items-center">
           <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
             <div className="mb-2 text-lg font-semibold">予約 {format(new Date(date), 'yyyy-MM-dd')}</div>
-            <div className="mb-2">コート {selectedCourt}</div>
-            <div className="mb-3">
-              <label className="mr-2">人数</label>
+            <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 text-sm">
+              <p className="font-bold mb-2">【重要】予約に関するお願い</p>
+              <p className="mb-2">予約はお一人様1枠までとなります。</p>
+              <p className="mb-2">複数枠のご予約は禁止です。2枠以上の予約が確認された場合は、管理側で削除いたします。</p>
+              <p className="mb-2">大会に参加する選手の方は <span className="font-bold">フルネーム</span> を入力してください。</p>
+              <p className="mb-2">選手以外（＝練習相手）の方は <span className="font-bold">「コーチ」</span> と入力をお願いします。</p>
+              <p className="mb-2">予約をキャンセルする場合は、必ず下記までお電話ください。</p>
+              <p className="font-bold">TEL：050-7118-5600</p>
               {(() => {
                 const used = usedCapacity(selectedSlot.start, selectedSlot.end, selectedCourt)
                 const maxAllowed = Math.max(1, 4 - used)
