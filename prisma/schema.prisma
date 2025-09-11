@@ -39,6 +39,7 @@ model Reservation {
 
   @@index([courtId, date])
   @@index([userId, date])
+  @@unique([date, courtId, startMin, endMin])
 }
 
 model AuditLog {
