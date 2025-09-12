@@ -46,24 +46,6 @@ export async function GET(req: Request) {
     const date = searchParams.get('date') // yyyy-mm-dd
     const courtId = searchParams.get('courtId')
 
-    // DIAGNOSTIC: /api/reservations?sentryPing=1 or __sentryPing=1
-    // Sends a uniquely timestamped error to Sentry and returns whether SENTRY_DSN is present.
-    if (searchParams.get('__sentryPing') === '1' || searchParams.get('sentryPing') === '1') {
-      const ts = new Date().toISOString()
-      const msg = `Sentry ping ${ts}`
-      captureErrorWithRequest(req, new Error(msg))
-      const hasDSN = !!process.env.SENTRY_DSN
-      const res = NextResponse.json({ ok: true, sent: true, message: msg, dsn: hasDSN ? 'present' : 'missing' })
-      res.headers.set('X-Sentry-DSN', hasDSN ? 'present' : 'missing')
-      res.headers.set('Cache-Control', 'no-store')
-      return res
-    }
-
-    // TEMP: Sentry verification flag. Access /api/reservations?testError=1[&msg=...] (or __testError / __msg) to emit a test error.
-    if (searchParams.get('__testError') === '1' || searchParams.get('testError') === '1') {
-      const msg = searchParams.get('msg') || searchParams.get('__msg') || `Sentry test error (manual trigger)`
-      throw new Error(msg)
-    }
 
     // If date provided: filter by day (and optional court)
     if (date) {
@@ -137,9 +119,12 @@ export async function POST(req: Request) {
         { error: 'リクエストが多すぎます。数秒後に再度お試しください。' },
         { status: 429 },
       )
-      if (idemKey) res429.headers.set('X-Idem-Key', idemKey)
-      res429.headers.set('X-Rate-Key', rateKey)
-      res429.headers.set('X-Rate-WindowMs', String(RL_WINDOW_MS))
+      // Debug headers only in non-production
+      if (process.env.NODE_ENV !== 'production') {
+        if (idemKey) res429.headers.set('X-Idem-Key', idemKey)
+        res429.headers.set('X-Rate-Key', rateKey)
+        res429.headers.set('X-Rate-WindowMs', String(RL_WINDOW_MS))
+      }
       return res429
     }
 
