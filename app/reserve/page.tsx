@@ -84,7 +84,9 @@ export default function ReservePage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: async (payload: any) => (await axios.post('/api/reservations', payload)).data,
+    mutationFn: async (args: { payload: any; idemKey: string }) => (
+      await axios.post('/api/reservations', args.payload, { headers: { 'Idempotency-Key': args.idemKey } })
+    ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
   })
 
@@ -254,20 +256,25 @@ export default function ReservePage() {
                 キャンセル
               </button>
               <button
-                className="flex-1 rounded bg-blue-600 px-3 py-2 text-white"
+                className="flex-1 rounded bg-blue-600 px-3 py-2 text-white disabled:opacity-60"
+                disabled={createMutation.isPending}
                 onClick={async () => {
                   try {
                     if (playerNames.some((n) => !n || !n.trim())) {
                       alert('人数分の氏名を入力してください')
                       return
                     }
+                    const idemKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
                     await createMutation.mutateAsync({
-                      courtId: selectedCourt,
-                      date,
-                      startMin: selectedSlot.start,
-                      endMin: selectedSlot.end,
-                      partySize,
-                      playerNames: playerNames.map((n) => n.trim()),
+                      idemKey,
+                      payload: {
+                        courtId: selectedCourt,
+                        date,
+                        startMin: selectedSlot.start,
+                        endMin: selectedSlot.end,
+                        partySize,
+                        playerNames: playerNames.map((n) => n.trim()),
+                      },
                     })
                     setSelectedSlot(null)
                     setPlayerNames(Array.from({ length: partySize }, () => ''))

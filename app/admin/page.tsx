@@ -131,30 +131,27 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {(!data || data.length === 0) ? (
-        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500 shadow-sm">予約はありません</div>
-      ) : (
-        <div className="rounded-lg border bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-            <div className="text-sm text-gray-600">全予約一覧</div>
-            <div className="flex items-center gap-2">
-              <input
-                className="w-56 rounded border px-3 py-1 text-sm"
-                type="search"
-                placeholder="検索（日時・コート・氏名など）"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <button
-                type="button"
-                className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
-                onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}
-              >
-                更新
-              </button>
-            </div>
+      <div className="rounded-lg border bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+          <div className="text-sm text-gray-600">設定</div>
+          <div className="flex items-center gap-2">
+            <input
+              className="w-56 rounded border px-3 py-1 text-sm"
+              type="search"
+              placeholder="予約検索（日時・コート・氏名など）"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <button
+              type="button"
+              className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
+              onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}
+            >
+              更新
+            </button>
           </div>
-          <div className="grid gap-4 border-b p-3 sm:grid-cols-2">
+        </div>
+        <div className="grid gap-4 border-b p-3 sm:grid-cols-2">
             <div className="space-y-1">
               <div className="text-sm font-medium">コート設定（管理者のみ）</div>
               <div className="flex items-center gap-2">
@@ -231,7 +228,10 @@ export default function AdminPage() {
               </div>
               <p className="text-xs text-gray-500">5分単位。開始＜終了、かつ（終了-開始）は枠分数で割り切れるようにしてください。</p>
             </div>
-          </div>
+        </div>
+        {(!data || data.length === 0) ? (
+          <div className="p-6 text-center text-sm text-gray-500">予約はありません</div>
+        ) : (
           <div className="overflow-auto">
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 z-10 bg-gray-50/90 backdrop-blur">
@@ -283,8 +283,8 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {confirmTarget && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">

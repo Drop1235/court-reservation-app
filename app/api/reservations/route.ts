@@ -20,14 +20,29 @@ function clientKey(req: Request): string {
       .split(',')[0]
       .trim()
     const ua = req.headers.get('user-agent') || ''
-    return ip || ua || 'unknown'
+    const path = new URL(req.url).pathname || ''
+    const combo = [ip && `ip:${ip}`, ua && `ua:${ua}`, path && `p:${path}`].filter(Boolean).join('|')
+    return combo || 'unknown'
   } catch {
     return 'unknown'
   }
 }
 
-// Simple in-memory idempotency storage (per serverless instance)
-const idemStore = new Map<string, { body: any; status: number; ts: number }>()
+async function buildRateKey(req: Request, idemKey: string | null): Promise<string> {
+  // Prefer userId when available; fallback to IP+UA+path
+  let base: string
+  try {
+    const user = await requireUser()
+    if (user?.id) base = `user:${user.id}`
+    else base = clientKey(req)
+  } catch {
+    base = clientKey(req)
+  }
+  return idemKey ? `post:${base}:${idemKey}` : `post:${base}`
+}
+
+// Shared idempotency storage backed by Netlify Blobs with in-memory fallback
+const idemStoreMem = new Map<string, { body: any; status: number; ts: number }>()
 const IDEM_TTL_MS = 10 * 60 * 1000 // 10 minutes
 function getIdemKey(req: Request): string | null {
   const k = req.headers.get('idempotency-key') || req.headers.get('x-idempotency-key')
@@ -35,9 +50,49 @@ function getIdemKey(req: Request): string | null {
 }
 function sweepIdem() {
   const now = Date.now()
-  for (const [k, v] of idemStore.entries()) {
-    if (now - v.ts > IDEM_TTL_MS) idemStore.delete(k)
+  for (const [k, v] of idemStoreMem.entries()) {
+    if (now - v.ts > IDEM_TTL_MS) idemStoreMem.delete(k)
   }
+}
+
+async function idemRead(key: string): Promise<{ body: any; status: number; ts: number } | null> {
+  // Try Netlify Blobs first
+  try {
+    // @ts-ignore dynamic import to avoid local dev dependency
+    const mod: any = await import('@netlify/blobs')
+    const getStore: ((name: string) => any) | undefined = (mod && (mod.getStore || (mod as any).blobs?.getStore)) as any
+    if (getStore) {
+      const store = getStore('idem')
+      const raw = await store.get(key)
+      if (raw) {
+        try { return JSON.parse(raw as string) } catch {}
+      }
+    }
+  } catch {}
+  // Fallback to memory map
+  const v = idemStoreMem.get(key)
+  if (!v) return null
+  if (Date.now() - v.ts > IDEM_TTL_MS) {
+    idemStoreMem.delete(key)
+    return null
+  }
+  return v
+}
+
+async function idemWrite(key: string, value: { body: any; status: number; ts: number }): Promise<void> {
+  // Try Netlify Blobs with TTL
+  try {
+    // @ts-ignore dynamic import
+    const mod: any = await import('@netlify/blobs')
+    const getStore: ((name: string) => any) | undefined = (mod && (mod.getStore || (mod as any).blobs?.getStore)) as any
+    if (getStore) {
+      const store = getStore('idem')
+      const ttlSeconds = Math.max(1, Math.ceil(IDEM_TTL_MS / 1000))
+      await store.set(key, JSON.stringify(value), { ttl: ttlSeconds })
+    }
+  } catch {}
+  // Always set memory fallback
+  idemStoreMem.set(key, value)
 }
 
 export async function GET(req: Request) {
@@ -104,16 +159,17 @@ export async function POST(req: Request) {
     // So that a duplicate submission with the same key returns cached 200 even within the window
     sweepIdem()
     const idemKey = getIdemKey(req)
-    if (idemKey && idemStore.has(idemKey)) {
-      const cached = idemStore.get(idemKey)!
-      return NextResponse.json(cached.body, { status: cached.status })
+    if (idemKey) {
+      const cached = await idemRead(idemKey)
+      if (cached) {
+        return NextResponse.json(cached.body, { status: cached.status })
+      }
     }
 
     // Best-effort IP-based rate limiting to reduce bursts.
     // If an Idempotency-Key is present, scope the limiter to that key so that
     // a brand-new idempotent submission is not blocked by a previous attempt.
-    const key = clientKey(req)
-    const rateKey = idemKey ? `post:${key}:${idemKey}` : `post:${key}`
+    const rateKey = await buildRateKey(req, idemKey)
     if (await rateLimitOnce(rateKey, RL_WINDOW_MS)) {
       const res429 = NextResponse.json(
         { error: 'リクエストが多すぎます。数秒後に再度お試しください。' },
@@ -251,7 +307,7 @@ export async function POST(req: Request) {
 
     // Store idempotent response for a short time
     if (idemKey) {
-      idemStore.set(idemKey, { body: created, status: 200, ts: Date.now() })
+      await idemWrite(idemKey, { body: created, status: 200, ts: Date.now() })
     }
     return NextResponse.json(created)
   } catch (e: any) {
