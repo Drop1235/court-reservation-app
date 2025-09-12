@@ -27,6 +27,10 @@ export function captureError(err: unknown) {
       await ensureInit()
       if (S && typeof (S as any).captureException === 'function') {
         ;(S as any).captureException(err)
+        // Ensure delivery before the serverless function exits
+        if (S && typeof (S as any).flush === 'function') {
+          try { await (S as any).flush(2000) } catch {}
+        }
       }
     } catch {
       // swallow errors
@@ -58,8 +62,15 @@ export function captureErrorWithRequest(req: Request, err: unknown) {
           } catch {}
           ;(S as any).captureException(err)
         })
+        // Ensure delivery before the serverless function exits
+        if (S && typeof (S as any).flush === 'function') {
+          try { await (S as any).flush(2000) } catch {}
+        }
       } else if (S && typeof (S as any).captureException === 'function') {
         ;(S as any).captureException(err)
+        if (S && typeof (S as any).flush === 'function') {
+          try { await (S as any).flush(2000) } catch {}
+        }
       }
     } catch {
       // swallow errors
