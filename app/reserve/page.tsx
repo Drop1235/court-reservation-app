@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useMemo, useState, Fragment } from 'react'
+import { useEffect, useMemo, useState, Fragment, useRef } from 'react'
 import { makeSlots, DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN } from '@/src/lib/time'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
@@ -68,10 +68,21 @@ export default function ReservePage() {
 
   const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
 
+  const etagRef = useRef<string | null>(null)
   const { data: reservations } = useQuery({
     queryKey: ['reservations', date],
-    queryFn: async () => (await axios.get(`/api/reservations?date=${date}`)).data,
-    refetchOnWindowFocus: false,
+    // Add no-cache header so browser/CDN revalidates immediately after a mutation
+    queryFn: async () => {
+      const headers: Record<string,string> = { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      if (etagRef.current) headers['If-None-Match'] = etagRef.current
+      const res = await axios.get(`/api/reservations?date=${date}`, { headers })
+      const etag = res.headers['etag'] || res.headers['ETag']
+      if (etag) etagRef.current = etag as string
+      return res.data
+    },
+    refetchOnWindowFocus: true,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
     staleTime: 30_000,
   })
 
@@ -87,7 +98,17 @@ export default function ReservePage() {
     mutationFn: async (args: { payload: any; idemKey: string }) => (
       await axios.post('/api/reservations', args.payload, { headers: { 'Idempotency-Key': args.idemKey } })
     ).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
+    onSuccess: (created: any) => {
+      // Optimistically reflect the new reservation on the UI instantly
+      qc.setQueryData(['reservations', date], (prev: any) => {
+        const list = Array.isArray(prev) ? prev.slice() : []
+        list.push(created)
+        return list
+      })
+      // Also trigger a background refetch to reconcile with server state
+      etagRef.current = null // force next poll to fetch fresh
+      qc.invalidateQueries({ queryKey: ['reservations', date] })
+    },
   })
 
   const [selectedSlot, setSelectedSlot] = useState<{ start: number; end: number } | null>(null)
@@ -136,7 +157,8 @@ export default function ReservePage() {
       <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <p className="mb-1">予約はお一人様1枠までとなります。</p>
-        <p className="mb-1">複数枠のご予約は禁止です。2枠以上の予約が確認された場合は、管理側で削除いたします。</p>
+        <p className="mb-1">ただし、練習を終えた後であれば新たに予約を入れていただけます。</p>
+        <p className="mb-1">複数枠の同時予約は禁止です。2枠以上の予約が確認された場合は、管理側で削除いたします。</p>
         <p className="mb-1">大会に参加する選手の方は <span className="font-bold">フルネーム</span> を入力してください。</p>
         <p className="mb-1">選手以外（＝練習相手）の方は <span className="font-bold">「コーチ」</span> と入力をお願いします。</p>
         <p className="mb-1">予約をキャンセルする場合は、必ず下記までお電話ください。</p>
@@ -214,7 +236,8 @@ export default function ReservePage() {
       {selectedSlot && (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-4 sm:place-items-center">
           <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
-            <div className="mb-2 text-lg font-semibold">予約 {format(new Date(date), 'yyyy-MM-dd')}</div>
+            <div className="mb-1 text-lg font-semibold">予約 {format(new Date(date), 'yyyy-MM-dd')}</div>
+            <div className="mb-3 text-sm text-gray-700">コート：{courtNames[selectedCourt-1] ?? `Court${selectedCourt}`}</div>
             <div className="mb-4 text-sm">
               {(() => {
                 const used = usedCapacity(selectedSlot.start, selectedSlot.end, selectedCourt)

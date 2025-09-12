@@ -80,6 +80,26 @@ export default function AdminPage() {
   const saveSetting = async () => {
     try {
       const names = Array.from({ length: settingCount }, (_, i) => settingNames[i] || `Court${i + 1}`)
+      // Client-side validation for time range and slot minutes
+      const aligned = (n: number) => n % 5 === 0
+      if (!aligned(startMin) || !aligned(endMin) || !aligned(slotMinutes)) {
+        alert('開始・終了・枠（分）は5分単位で入力してください。')
+        return
+      }
+      if (startMin >= endMin) {
+        alert('開始時刻は終了時刻より前にしてください。')
+        return
+      }
+      const range = endMin - startMin
+      if (range % slotMinutes !== 0) {
+        // 提案: 指定レンジを割り切れる候補を提示
+        const candidates = Array.from({ length: 240 / 5 }, (_, i) => (i + 1) * 5).filter((m) => m >= 5 && m <= 240 && range % m === 0)
+        const suggestion = candidates.length > 0 ? `（例: ${candidates.filter((m)=>[10,15,20,30,40,45,60,90,120].includes(m)).join(', ') || candidates.slice(0,6).join(', ')}）` : ''
+        alert(`「終了-開始」が枠（分）で割り切れる必要があります。
+範囲: ${Math.floor(range/60)}時間${range%60}分 / 現在の枠: ${slotMinutes}分 は不正です。
+割り切れる枠の候補 ${suggestion}`)
+        return
+      }
       await axios.post(
         '/api/admin/court-setting',
         { date: settingDate, courtCount: settingCount, courtNames: names, startMin, endMin, slotMinutes },
