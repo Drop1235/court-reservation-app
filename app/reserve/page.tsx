@@ -107,6 +107,15 @@ export default function ReservePage() {
       })
       // Also trigger a background refetch to reconcile with server state
       etagRef.current = null // force next poll to fetch fresh
+      // Guarantee network gets the newest snapshot (bypass CDN/browser cache once)
+      try {
+        const resNow = await axios.get(`/api/reservations?date=${date}&_=${Date.now()}`,
+          { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
+        qc.setQueryData(['reservations', date], resNow.data)
+      } catch {
+        // ignore; periodic refetch will still sync
+      }
+      // Additionally let react-query do a standard refetch for consistency
       await qc.refetchQueries({ queryKey: ['reservations', date] })
     },
   })
