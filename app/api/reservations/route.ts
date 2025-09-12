@@ -105,18 +105,19 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // Best-effort IP-based rate limiting to reduce bursts
-    const key = clientKey(req)
-    if (await rateLimitOnce(`post:${key}`, RL_WINDOW_MS)) {
-      return NextResponse.json({ error: 'リクエストが多すぎます。数秒後に再度お試しください。' }, { status: 429 })
-    }
-
-    // Idempotency-Key handling (best-effort per instance)
+    // Idempotency-Key handling (best-effort per instance) — check BEFORE rate limiting
+    // So that a duplicate submission with the same key returns cached 200 even within the window
     sweepIdem()
     const idemKey = getIdemKey(req)
     if (idemKey && idemStore.has(idemKey)) {
       const cached = idemStore.get(idemKey)!
       return NextResponse.json(cached.body, { status: cached.status })
+    }
+
+    // Best-effort IP-based rate limiting to reduce bursts
+    const key = clientKey(req)
+    if (await rateLimitOnce(`post:${key}`, RL_WINDOW_MS)) {
+      return NextResponse.json({ error: 'リクエストが多すぎます。数秒後に再度お試しください。' }, { status: 429 })
     }
 
     // Try to use the logged-in user; if not logged in, fall back to a default seeded user
