@@ -45,6 +45,12 @@ export async function GET(req: Request) {
     const date = searchParams.get('date') // yyyy-mm-dd
     const courtId = searchParams.get('courtId')
 
+    // TEMP: Sentry verification flag. Access /api/reservations?__testError=1 to emit a test error.
+    // Remove this block after confirming Sentry Issues receives the event.
+    if (searchParams.get('__testError') === '1') {
+      throw new Error('Sentry test error (manual trigger)')
+    }
+
     // If date provided: filter by day (and optional court)
     if (date) {
       const startOfDay = new Date(date + 'T00:00:00.000Z')
@@ -59,11 +65,15 @@ export async function GET(req: Request) {
         const res304 = new NextResponse(null, { status: 304 })
         res304.headers.set('ETag', etag)
         res304.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
+        res304.headers.set('X-ETag-Calc', etag)
+        res304.headers.set('X-Cache-Intent', 'public-30')
         return res304
       }
       const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
       res.headers.set('ETag', etag)
       res.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
+      res.headers.set('X-ETag-Calc', etag)
+      res.headers.set('X-Cache-Intent', 'public-30')
       return res
     }
 
@@ -76,11 +86,15 @@ export async function GET(req: Request) {
       const res304 = new NextResponse(null, { status: 304 })
       res304.headers.set('ETag', etag)
       res304.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
+      res304.headers.set('X-ETag-Calc', etag)
+      res304.headers.set('X-Cache-Intent', 'public-30')
       return res304
     }
     const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
     res.headers.set('ETag', etag)
     res.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
+    res.headers.set('X-ETag-Calc', etag)
+    res.headers.set('X-Cache-Intent', 'public-30')
     return res
   } catch (e: any) {
     captureError(e)
