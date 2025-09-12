@@ -33,3 +33,31 @@ export function captureError(err: unknown) {
     }
   })()
 }
+
+// Capture error with minimal request context so that Sentry UI shows request.url, headers, etc.
+export function captureErrorWithRequest(req: Request, err: unknown) {
+  if (!DSN) return
+  ;(async () => {
+    try {
+      await ensureInit()
+      if (S && typeof (S as any).withScope === 'function') {
+        ;(S as any).withScope((scope: any) => {
+          try {
+            const headers: Record<string, string> = {}
+            for (const [k, v] of (req.headers as any).entries()) headers[k] = String(v)
+            scope.setContext('request', {
+              url: req.url,
+              method: (req as any).method || 'GET',
+              headers,
+            })
+          } catch {}
+          ;(S as any).captureException(err)
+        })
+      } else if (S && typeof (S as any).captureException === 'function') {
+        ;(S as any).captureException(err)
+      }
+    } catch {
+      // swallow errors
+    }
+  })()
+}
