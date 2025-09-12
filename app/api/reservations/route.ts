@@ -6,7 +6,7 @@ import { normalizeNames } from '@/src/lib/text'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { rateLimitOnce } from '@/src/lib/rate-limit'
-import { captureError } from '@/src/lib/sentry'
+import { captureError, captureErrorWithRequest } from '@/src/lib/sentry'
 
 // Rate limit window
 const RL_WINDOW_MS = 10_000 // 10 seconds per key
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
     res.headers.set('X-Cache-Intent', 'public-30')
     return res
   } catch (e: any) {
-    captureError(e)
+    captureErrorWithRequest(req, e)
     return NextResponse.json({ error: e?.message ?? 'Failed to fetch reservations' }, { status: 400 })
   }
 }
@@ -257,7 +257,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(created)
   } catch (e: any) {
-    captureError(e)
+    captureErrorWithRequest(req, e)
     return NextResponse.json({ error: e.message ?? 'Error' }, { status: 400 })
   }
 }
