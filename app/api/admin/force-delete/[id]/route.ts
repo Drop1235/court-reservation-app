@@ -9,9 +9,12 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     if (!expected || pin !== expected) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    await prisma.reservation.delete({ where: { id: params.id } })
-    await prisma.auditLog.create({ data: { action: 'force_delete', actorEmail: 'public', meta: { reservationId: params.id } } })
-    return NextResponse.json({ ok: true })
+    // Idempotent delete: do not error if already deleted
+    const result = await prisma.reservation.deleteMany({ where: { id: params.id } })
+    if (result.count > 0) {
+      await prisma.auditLog.create({ data: { action: 'force_delete', actorEmail: 'public', meta: { reservationId: params.id } } })
+    }
+    return NextResponse.json({ ok: true, deleted: result.count })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? 'Error' }, { status: 400 })
   }

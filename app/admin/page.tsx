@@ -331,8 +331,15 @@ export default function AdminPage() {
                 disabled={del.isPending}
                 onClick={async () => {
                   const id = confirmTarget.id
-                  setConfirmTarget(null)
-                  del.mutate(id)
+                  // Optimistic remove from table for snappy UX
+                  qc.setQueryData(['all-res'], (prev: any) => Array.isArray(prev) ? prev.filter((r: any) => r.id !== id) : prev)
+                  try {
+                    await del.mutateAsync(id)
+                  } finally {
+                    setConfirmTarget(null)
+                    // Ensure we are fully synced with server
+                    await qc.refetchQueries({ queryKey: ['all-res'] })
+                  }
                 }}
               >
                 はい
