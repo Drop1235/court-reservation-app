@@ -45,11 +45,16 @@ export function captureErrorWithRequest(req: Request, err: unknown) {
           try {
             const headers: Record<string, string> = {}
             for (const [k, v] of (req.headers as any).entries()) headers[k] = String(v)
+            // Prefer a dedicated context for request
             scope.setContext('request', {
               url: req.url,
               method: (req as any).method || 'GET',
               headers,
             })
+            // Also add tags/extras to guarantee visibility in UI
+            scope.setTag('request_url', req.url)
+            scope.setTag('request_method', (req as any).method || 'GET')
+            scope.setExtra('request_headers', headers)
           } catch {}
           ;(S as any).captureException(err)
         })
