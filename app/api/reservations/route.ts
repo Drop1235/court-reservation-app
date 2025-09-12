@@ -24,6 +24,7 @@ function clientKey(req: Request): string {
   } catch {
     return 'unknown'
   }
+}
 
 // Simple in-memory idempotency storage (per serverless instance)
 const idemStore = new Map<string, { body: any; status: number; ts: number }>()
