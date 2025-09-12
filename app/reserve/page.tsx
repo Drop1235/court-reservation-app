@@ -98,7 +98,7 @@ export default function ReservePage() {
     mutationFn: async (args: { payload: any; idemKey: string }) => (
       await axios.post('/api/reservations', args.payload, { headers: { 'Idempotency-Key': args.idemKey } })
     ).data,
-    onSuccess: (created: any) => {
+    onSuccess: async (created: any) => {
       // Optimistically reflect the new reservation on the UI instantly
       qc.setQueryData(['reservations', date], (prev: any) => {
         const list = Array.isArray(prev) ? prev.slice() : []
@@ -107,7 +107,7 @@ export default function ReservePage() {
       })
       // Also trigger a background refetch to reconcile with server state
       etagRef.current = null // force next poll to fetch fresh
-      qc.invalidateQueries({ queryKey: ['reservations', date] })
+      await qc.refetchQueries({ queryKey: ['reservations', date] })
     },
   })
 
