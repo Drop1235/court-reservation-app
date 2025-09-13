@@ -12,7 +12,14 @@ const fmt = (min: number) => {
 
 export default function AdminPage() {
   const qc = useQueryClient()
-  const { data } = useQuery({ queryKey: ['all-res'], queryFn: async () => (await axios.get('/api/reservations')).data })
+  const { data } = useQuery({
+    queryKey: ['all-res'],
+    queryFn: async () => {
+      const res = await axios.get('/api/reservations', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
+      return res.data
+    },
+    refetchOnWindowFocus: true,
+  })
   const [q, setQ] = useState('')
   const [pin, setPin] = useState('')
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
@@ -128,7 +135,7 @@ export default function AdminPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
-          <div className="hidden sm:flex items-center gap-1 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <label className="text-gray-600">過去予約一括削除の基準日</label>
             <input type="date" className="rounded border px-2 py-1" value={bulkCutoff} onChange={(e)=>setBulkCutoff(e.target.value)} />
             <button
@@ -139,7 +146,10 @@ export default function AdminPage() {
                 try {
                   const res = await axios.post('/api/admin/bulk-delete-past', { before: bulkCutoff + 'T00:00:00.000Z' }, { headers: { 'x-admin-pin': pin } })
                   alert(`削除件数: ${res.data.deleted}`)
-                  qc.invalidateQueries({ queryKey: ['all-res'] })
+                  // Cache-busting fetch to avoid stale CDN/browser cache
+                  const fresh = await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
+                  qc.setQueryData(['all-res'], fresh.data)
+                  await qc.refetchQueries({ queryKey: ['all-res'] })
                 } catch (e: any) {
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '一括削除に失敗しました')
@@ -335,9 +345,12 @@ export default function AdminPage() {
                   qc.setQueryData(['all-res'], (prev: any) => Array.isArray(prev) ? prev.filter((r: any) => r.id !== id) : prev)
                   try {
                     await del.mutateAsync(id)
+                    // Strong sync: cache-busting fetch to avoid stale cached list re-appearing
+                    const fresh = await axios.get(`/api/reservations?_=${Date.now()}`,
+                      { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
+                    qc.setQueryData(['all-res'], fresh.data)
                   } finally {
                     setConfirmTarget(null)
-                    // Ensure we are fully synced with server
                     await qc.refetchQueries({ queryKey: ['all-res'] })
                   }
                 }}
