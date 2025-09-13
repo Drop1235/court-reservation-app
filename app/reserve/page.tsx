@@ -81,11 +81,14 @@ export default function ReservePage() {
       const etag = res.headers['etag'] || res.headers['ETag']
       if (etag) etagRef.current = etag as string
       // Merge server data with any optimistic temps (avoid duplicates by id)
-      const base = Array.isArray(res.data) ? res.data.slice() : []
+      const server = Array.isArray(res.data) ? res.data.slice() : []
+      // Clean up temps that are now present in server data (use server list, not merged)
+      tempsRef.current = tempsRef.current.filter((t) => !server.some((r: any) => r.id === t.id))
+      const merged = server.slice()
       for (const t of tempsRef.current) {
-        if (!base.some((r: any) => r.id === t.id)) base.push(t)
+        if (!merged.some((r: any) => r.id === t.id)) merged.push(t)
       }
-      return base
+      return merged
     },
     refetchOnWindowFocus: true,
     refetchInterval: 10_000,
@@ -93,12 +96,20 @@ export default function ReservePage() {
     staleTime: 30_000,
   })
 
+  // Merge current data with temps for UI calculations
+  const currentWithTemps = () => {
+    const base = Array.isArray(reservations) ? reservations.slice() : []
+    for (const t of tempsRef.current) {
+      if (!base.some((r: any) => r.id === t.id)) base.push(t)
+    }
+    return base
+  }
+
   const usedCapacity = (start: number, end: number, courtId: number) => {
-    return (
-      reservations
-        ?.filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
-        .reduce((acc: number, r: any) => acc + r.partySize, 0) ?? 0
-    )
+    const list = currentWithTemps()
+    return list
+      .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
+      .reduce((acc: number, r: any) => acc + r.partySize, 0)
   }
 
   const createMutation = useMutation({
@@ -144,7 +155,13 @@ export default function ReservePage() {
         else list.push(created)
         return list
       })
-      if (ctx?.tempId) tempsRef.current = tempsRef.current.filter((x) => x.id !== ctx.tempId)
+      // Keep the created record pinned until server GET includes it
+      if (ctx?.tempId) {
+        tempsRef.current = [
+          ...tempsRef.current.filter((x) => x.id !== ctx.tempId),
+          created,
+        ]
+      }
       // Also trigger a background refetch to reconcile with server state
       etagRef.current = null // force next poll to fetch fresh
       // Guarantee network gets the newest snapshot (bypass CDN/browser cache once)
@@ -152,11 +169,14 @@ export default function ReservePage() {
         const resNow = await axios.get(`/api/reservations?date=${date}&_=${Date.now()}`,
           { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
         // Merge temps into the fresh payload just in case success of other mutation is still pending
-        const fresh = Array.isArray(resNow.data) ? resNow.data.slice() : []
+        const serverFresh = Array.isArray(resNow.data) ? resNow.data.slice() : []
+        // Clean up temps that now appear in server data (use server list, not merged)
+        tempsRef.current = tempsRef.current.filter((t) => !serverFresh.some((r: any) => r.id === t.id))
+        const mergedFresh = serverFresh.slice()
         for (const t of tempsRef.current) {
-          if (!fresh.some((r: any) => r.id === t.id)) fresh.push(t)
+          if (!mergedFresh.some((r: any) => r.id === t.id)) mergedFresh.push(t)
         }
-        qc.setQueryData(['reservations', date], fresh)
+        qc.setQueryData(['reservations', date], mergedFresh)
       } catch {
         // ignore; periodic refetch will still sync
       }
@@ -191,11 +211,10 @@ export default function ReservePage() {
 
   // Helper: names booked for a given slot
   const namesForSlot = (start: number, end: number, courtId: number) => {
-    return (
-      reservations
-        ?.filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
-        .flatMap((r: any) => (Array.isArray(r.playerNames) ? r.playerNames : [])) ?? []
-    )
+    const list = currentWithTemps()
+    return list
+      .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
+      .flatMap((r: any) => (Array.isArray(r.playerNames) ? r.playerNames : []))
   }
 
   const fmt = (min: number) => {
