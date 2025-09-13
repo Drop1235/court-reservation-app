@@ -69,6 +69,8 @@ export default function ReservePage() {
   const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
 
   const etagRef = useRef<string | null>(null)
+  // Keep optimistic temps visible even if a background refetch returns without the new row yet
+  const tempsRef = useRef<any[]>([])
   const { data: reservations } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
@@ -78,7 +80,12 @@ export default function ReservePage() {
       const res = await axios.get(`/api/reservations?date=${date}`, { headers })
       const etag = res.headers['etag'] || res.headers['ETag']
       if (etag) etagRef.current = etag as string
-      return res.data
+      // Merge server data with any optimistic temps (avoid duplicates by id)
+      const base = Array.isArray(res.data) ? res.data.slice() : []
+      for (const t of tempsRef.current) {
+        if (!base.some((r: any) => r.id === t.id)) base.push(t)
+      }
+      return base
     },
     refetchOnWindowFocus: true,
     refetchInterval: 10_000,
@@ -112,6 +119,7 @@ export default function ReservePage() {
         playerNames: args.payload.playerNames,
         __temp: true,
       }
+      tempsRef.current = [...tempsRef.current.filter((x) => x.id !== tempId), temp]
       qc.setQueryData(['reservations', date], (prev: any) => {
         const list = Array.isArray(prev) ? prev.slice() : []
         list.push(temp)
@@ -120,6 +128,7 @@ export default function ReservePage() {
       return { previous, tempId }
     },
     onError: (err: any, _vars, ctx) => {
+      if (ctx?.tempId) tempsRef.current = tempsRef.current.filter((x) => x.id !== ctx.tempId)
       if (ctx?.previous) qc.setQueryData(['reservations', date], ctx.previous)
       const msg = err?.response?.data?.error
         || err?.message
@@ -135,13 +144,19 @@ export default function ReservePage() {
         else list.push(created)
         return list
       })
+      if (ctx?.tempId) tempsRef.current = tempsRef.current.filter((x) => x.id !== ctx.tempId)
       // Also trigger a background refetch to reconcile with server state
       etagRef.current = null // force next poll to fetch fresh
       // Guarantee network gets the newest snapshot (bypass CDN/browser cache once)
       try {
         const resNow = await axios.get(`/api/reservations?date=${date}&_=${Date.now()}`,
           { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-        qc.setQueryData(['reservations', date], resNow.data)
+        // Merge temps into the fresh payload just in case success of other mutation is still pending
+        const fresh = Array.isArray(resNow.data) ? resNow.data.slice() : []
+        for (const t of tempsRef.current) {
+          if (!fresh.some((r: any) => r.id === t.id)) fresh.push(t)
+        }
+        qc.setQueryData(['reservations', date], fresh)
       } catch {
         // ignore; periodic refetch will still sync
       }
