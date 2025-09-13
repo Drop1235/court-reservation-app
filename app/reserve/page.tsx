@@ -98,11 +98,41 @@ export default function ReservePage() {
     mutationFn: async (args: { payload: any; idemKey: string }) => (
       await axios.post('/api/reservations', args.payload, { headers: { 'Idempotency-Key': args.idemKey } })
     ).data,
-    onSuccess: async (created: any) => {
-      // Optimistically reflect the new reservation on the UI instantly
+    onMutate: async (args: { payload: any; idemKey: string }) => {
+      await qc.cancelQueries({ queryKey: ['reservations', date] })
+      const previous = qc.getQueryData(['reservations', date]) as any[] | undefined
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const temp = {
+        id: tempId,
+        courtId: args.payload.courtId,
+        date: new Date(date + 'T00:00:00.000Z'),
+        startMin: args.payload.startMin,
+        endMin: args.payload.endMin,
+        partySize: args.payload.partySize,
+        playerNames: args.payload.playerNames,
+        __temp: true,
+      }
       qc.setQueryData(['reservations', date], (prev: any) => {
         const list = Array.isArray(prev) ? prev.slice() : []
-        list.push(created)
+        list.push(temp)
+        return list
+      })
+      return { previous, tempId }
+    },
+    onError: (err: any, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['reservations', date], ctx.previous)
+      const msg = err?.response?.data?.error
+        || err?.message
+        || '予約に失敗しました。他の方の予約と競合した可能性があります。時間や人数を変更して再度お試しください。'
+      alert(msg)
+    },
+    onSuccess: async (created: any, _vars, ctx) => {
+      // Replace temp with server result (or append if temp not found)
+      qc.setQueryData(['reservations', date], (prev: any) => {
+        const list = Array.isArray(prev) ? prev.slice() : []
+        const idx = list.findIndex((r: any) => r.id === ctx?.tempId)
+        if (idx >= 0) list[idx] = created
+        else list.push(created)
         return list
       })
       // Also trigger a background refetch to reconcile with server state
@@ -311,7 +341,7 @@ export default function ReservePage() {
                     setSelectedSlot(null)
                     setPlayerNames(Array.from({ length: partySize }, () => ''))
                   } catch (e: any) {
-                    alert(e.response?.data?.error ?? 'エラーが発生しました')
+                    // onError handler alerts; no duplicate alert here
                   }
                 }}
               >
