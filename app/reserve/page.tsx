@@ -205,93 +205,24 @@ export default function ReservePage() {
       } else if (partySize < next.length) {
         next.length = partySize
       }
+      return next
     })
-    return { previous, tempId }
-  },
-  onError: (err: any, _vars, ctx) => {
-    if (ctx?.tempId) tempsRef.current = tempsRef.current.filter((x) => x.id !== ctx.tempId)
-    if (ctx?.previous) qc.setQueryData(['reservations', date], ctx.previous)
-    const msg = err?.response?.data?.error
-      || err?.message
-      || '予約に失敗しました。他の方の予約と競合した可能性があります。時間や人数を変更して再度お試しください。'
-    alert(msg)
-  },
-  onSuccess: async (created: any, _vars, ctx) => {
-    // Replace temp with server result (or append if temp not found)
-    qc.setQueryData(['reservations', date], (prev: any) => {
-      const list = Array.isArray(prev) ? prev.slice() : []
-      const idx = list.findIndex((r: any) => r.id === ctx?.tempId)
-      if (idx >= 0) list[idx] = created
-      else list.push(created)
-      return list
-    })
-    // Keep the created record pinned until server GET includes it
-    if (ctx?.tempId) {
-      tempsRef.current = [
-        ...tempsRef.current.filter((x) => x.id !== ctx.tempId),
-        created,
-      ]
-    }
-    // Also trigger a background refetch to reconcile with server state
-    etagRef.current = null // force next poll to fetch fresh
-    // Guarantee network gets the newest snapshot (bypass CDN/browser cache once)
-    try {
-      const resNow = await axios.get(`/api/reservations?date=${date}&_=${Date.now()}`,
-        { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-      // Merge temps into the fresh payload just in case success of other mutation is still pending
-      const serverFresh = Array.isArray(resNow.data) ? resNow.data.slice() : []
-      // Clean up temps that now appear in server data (use server list, not merged)
-      tempsRef.current = tempsRef.current.filter((t) => !serverFresh.some((r: any) => r.id === t.id))
-      const mergedFresh = serverFresh.slice()
-      for (const t of tempsRef.current) {
-        if (!mergedFresh.some((r: any) => r.id === t.id)) mergedFresh.push(t)
-      }
-      qc.setQueryData(['reservations', date], mergedFresh)
-    } catch {
-      // ignore; periodic refetch will still sync
-    }
-    // Additionally let react-query do a standard refetch for consistency
-    await qc.refetchQueries({ queryKey: ['reservations', date] })
-  },
-})
+  }, [partySize])
 
-const [selectedSlot, setSelectedSlot] = useState<{ start: number; end: number } | null>(null)
+  // Helper: names booked for a given slot
+  const renderTimeSlot = (start: number, end: number, isTemp = false) => (courtId: number) => {
+    const list = currentWithTemps()
+    return list
+      .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
+      .map((r: any) => ({ id: r.id, names: Array.isArray(r.playerNames) ? r.playerNames : [], isTemp: r.__temp === true }))
+  }
 
-// Changing date should reset the selection; changing court should not (to allow opening dialog from a cell)
-useEffect(() => setSelectedSlot(null), [date])
-// When opening modal or data changes, clamp partySize to remaining capacity
-useEffect(() => {
-  if (!selectedSlot) return
-  const used = usedCapacity(selectedSlot.start, selectedSlot.end, selectedCourt)
-  const maxAllowed = Math.max(1, 4 - used)
-  setPartySize((p) => Math.min(p, maxAllowed))
-}, [selectedSlot, selectedCourt, reservations])
-// ensure playerNames length equals partySize
-useEffect(() => {
-  setPlayerNames((prev) => {
-    const next = [...prev]
-    if (partySize > next.length) {
-      while (next.length < partySize) next.push('')
-    } else if (partySize < next.length) {
-      next.length = partySize
-    }
-    return next
-  })
-}, [partySize])
+  const fmt = (min: number) => {
+    const h = Math.floor(min / 60)
+    const m = min % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
 
-// Helper: names booked for a given slot
-const renderTimeSlot = (start: number, end: number, isTemp = false) => (courtId: number) => {
-  const list = currentWithTemps()
-  return list
-    .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
-    .map((r: any) => ({ id: r.id, names: Array.isArray(r.playerNames) ? r.playerNames : [], isTemp: r.__temp === true }))
-}
-
-const fmt = (min: number) => {
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
 
 const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false }: any) => {
   if (!isAvailable) return <div className="h-full bg-gray-100" />
@@ -316,8 +247,78 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           <div key={i} className="truncate">{name}</div>
         ))}
       </button>
-              ))}
-            </div>
+    </div>
+  )
+}
+
+  // Names for a slot and court
+  const namesForSlot = (start: number, end: number, courtId: number) => {
+    const list = currentWithTemps()
+    return list
+      .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
+      .flatMap((r: any) => (Array.isArray(r.playerNames) ? r.playerNames : []))
+  }
+
+  const isTimeSlotAvailable = (start: number, end: number, courtId: number) => {
+    // available if not full
+    return usedCapacity(start, end, courtId) < 4
+  }
+
+  if (!mounted) return null
+  return (
+    <div className="p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <input
+          type="date"
+          className="rounded border px-2 py-1"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+        <div className="text-sm text-gray-500">コート数: {courtCount}</div>
+      </div>
+
+      <div className="overflow-auto rounded border">
+        <div className="min-w-[680px]">
+          <div className="grid grid-cols-[80px_repeat(var(--cols),1fr)]" style={{ ['--cols' as any]: courtCount }}>
+            <div className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600">時間</div>
+            {Array.from({ length: courtCount }, (_, i) => (
+              <div key={`h-${i}`} className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600 text-center">
+                {courtNames[i] ?? `Court${i + 1}`}
+              </div>
+            ))}
+
+            {slots.map(({ start: s, end: e }, rowIdx) => (
+              <Fragment key={`row-${rowIdx}`}>
+                <div className="flex items-center justify-center border-t p-2 text-xs text-gray-600">
+                  {fmt(s)} - {fmt(e)}
+                </div>
+                {Array.from({ length: courtCount }, (_, ci) => {
+                  const courtId = ci + 1
+                  const names = namesForSlot(s, e, courtId)
+                  const full = usedCapacity(s, e, courtId) >= 4
+                  const isTemp = currentWithTemps().some(r => r.courtId === courtId && r.startMin === s && r.endMin === e && r.__temp === true)
+                  return (
+                    <div key={`c-${rowIdx}-${courtId}`} className="border-t border-l">
+                      <ReservationCell
+                        courtId={courtId}
+                        start={s}
+                        end={e}
+                        onClick={() => {
+                          if (full) return
+                          setSelectedCourt(courtId)
+                          setSelectedSlot({ start: s, end: e })
+                        }}
+                        isSelected={!!selectedSlot && selectedCourt === courtId && selectedSlot.start === s && selectedSlot.end === e}
+                        isAvailable={isTimeSlotAvailable(s, e, courtId)}
+                        isFull={full}
+                        names={names}
+                        isTemp={isTemp}
+                      />
+                    </div>
+                  )
+                })}
+              </Fragment>
+            ))}
           </div>
         </div>
       </div>
@@ -403,4 +404,3 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       )}
     </div>
   )
-}
