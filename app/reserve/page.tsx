@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, Fragment, useRef } from 'react'
 import { makeSlots, DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN } from '@/src/lib/time'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { halfHourSlots9to21 } from '@/src/lib/time'
 import { format } from 'date-fns'
 
 const DEFAULT_COURT_COUNT = 4
@@ -404,3 +403,4 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       )}
     </div>
   )
+}
