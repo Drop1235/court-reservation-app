@@ -223,7 +223,7 @@ export default function ReservePage() {
   }
 
 
-const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false }: any) => {
+const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0 }: any) => {
   if (!isAvailable) return <div className="h-full bg-gray-100" />
   if (isFull) return <div className="flex h-full items-center justify-center bg-gray-100 text-xs text-gray-400">×</div>
   
@@ -245,6 +245,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         {names.map((name: string, i: number) => (
           <div key={i} className="truncate">{name}</div>
         ))}
+        <span className="absolute bottom-0.5 right-1 text-[10px] text-gray-400">{used}/4</span>
       </button>
     </div>
   )
@@ -294,7 +295,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 {Array.from({ length: courtCount }, (_, ci) => {
                   const courtId = ci + 1
                   const names = namesForSlot(s, e, courtId)
-                  const full = usedCapacity(s, e, courtId) >= 4
+                  const used = usedCapacity(s, e, courtId)
+                  const full = used >= 4
                   const isTemp = currentWithTemps().some(r => r.courtId === courtId && r.startMin === s && r.endMin === e && r.__temp === true)
                   return (
                     <div key={`c-${rowIdx}-${courtId}`} className="border-t border-l">
@@ -312,6 +314,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         isFull={full}
                         names={names}
                         isTemp={isTemp}
+                        used={used}
                       />
                     </div>
                   )
