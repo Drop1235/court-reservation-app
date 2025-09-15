@@ -2,7 +2,7 @@
 import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const fmt = (min: number) => {
   const h = Math.floor(min / 60)
@@ -12,11 +12,20 @@ const fmt = (min: number) => {
 
 export default function AdminPage() {
   const qc = useQueryClient()
+  // Persistently hide items considered deleted until server confirms they are gone
+  const deletedRef = useRef<Set<string>>(new Set())
   const { data } = useQuery({
     queryKey: ['all-res'],
     queryFn: async () => {
       const res = await axios.get('/api/reservations', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
-      return res.data
+      const server: any[] = Array.isArray(res.data) ? res.data : []
+      // If server no longer returns some ids, drop them from deletedRef
+      const serverIds = new Set<string>(server.map((r: any) => r.id))
+      for (const id of Array.from(deletedRef.current)) {
+        if (!serverIds.has(id)) deletedRef.current.delete(id)
+      }
+      // Hide deleted ids from the list
+      return server.filter((r: any) => !deletedRef.current.has(r.id))
     },
     refetchOnWindowFocus: true,
   })
@@ -45,7 +54,10 @@ export default function AdminPage() {
   const del = useMutation({
     mutationFn: async (id: string) => (await axios.delete(`/api/admin/force-delete/${id}`, { headers: { 'x-admin-pin': pin } })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['all-res'] }),
-    onError: (e: any) => {
+    onError: (e: any, id: string) => {
+      // Rollback hidden state on error
+      if (id) deletedRef.current.delete(id)
+      qc.invalidateQueries({ queryKey: ['all-res'] })
       if (e?.response?.status === 401) {
         alert('管理PINを入力してください')
       } else {
@@ -144,13 +156,24 @@ export default function AdminPage() {
               onClick={async ()=>{
                 if (!confirm(`${bulkCutoff} より前の予約をすべて削除します。よろしいですか？`)) return
                 try {
+                  // Optimistically hide all rows older than cutoff
+                  const cutoff = new Date(bulkCutoff + 'T00:00:00.000Z').getTime()
+                  const toHide: string[] = (Array.isArray(data) ? data : [])
+                    .filter((r: any) => new Date(r.date).getTime() < cutoff)
+                    .map((r: any) => r.id)
+                  for (const id of toHide) deletedRef.current.add(id)
+                  qc.setQueryData(['all-res'], (prev: any) => Array.isArray(prev) ? prev.filter((r: any) => !deletedRef.current.has(r.id)) : prev)
                   const res = await axios.post('/api/admin/bulk-delete-past', { before: bulkCutoff + 'T00:00:00.000Z' }, { headers: { 'x-admin-pin': pin } })
                   alert(`削除件数: ${res.data.deleted}`)
                   // Cache-busting fetch to avoid stale CDN/browser cache
                   const fresh = await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-                  qc.setQueryData(['all-res'], fresh.data)
+                  const filtered = (Array.isArray(fresh.data) ? fresh.data : []).filter((r: any) => !deletedRef.current.has(r.id))
+                  qc.setQueryData(['all-res'], filtered)
                   await qc.refetchQueries({ queryKey: ['all-res'] })
                 } catch (e: any) {
+                  // Rollback optimistic hide on failure
+                  deletedRef.current.clear()
+                  qc.invalidateQueries({ queryKey: ['all-res'] })
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '一括削除に失敗しました')
                 }
@@ -341,6 +364,8 @@ export default function AdminPage() {
                 disabled={del.isPending}
                 onClick={async () => {
                   const id = confirmTarget.id
+                  // Persistently hide this row until server confirms deletion
+                  deletedRef.current.add(id)
                   // Optimistic remove from table for snappy UX
                   qc.setQueryData(['all-res'], (prev: any) => Array.isArray(prev) ? prev.filter((r: any) => r.id !== id) : prev)
                   try {
@@ -348,7 +373,8 @@ export default function AdminPage() {
                     // Strong sync: cache-busting fetch to avoid stale cached list re-appearing
                     const fresh = await axios.get(`/api/reservations?_=${Date.now()}`,
                       { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-                    qc.setQueryData(['all-res'], fresh.data)
+                    const filtered = (Array.isArray(fresh.data) ? fresh.data : []).filter((r: any) => !deletedRef.current.has(r.id))
+                    qc.setQueryData(['all-res'], filtered)
                   } finally {
                     setConfirmTarget(null)
                     await qc.refetchQueries({ queryKey: ['all-res'] })
