@@ -39,6 +39,14 @@ export default function AdminPage() {
   const [endMin, setEndMin] = useState<number>(21 * 60)
   const [slotMinutes, setSlotMinutes] = useState<number>(30)
 
+  // single-day admin state
+  const [dayDate, setDayDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
+  const [dayCourtCount, setDayCourtCount] = useState<number>(4)
+  const [dayCourtNames, setDayCourtNames] = useState<string[]>(['Court1','Court2','Court3','Court4'])
+  const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
+  const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
+  const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
+
   // load PIN from sessionStorage
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -181,6 +189,116 @@ export default function AdminPage() {
             >過去予約を一括削除</button>
           </div>
           <div className="text-xs text-gray-500">{data?.length ?? 0} 件</div>
+        </div>
+      </div>
+
+      {/* Single-day controls */}
+      <div className="rounded-lg border bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-2 border-b p-3">
+          <div className="text-sm font-medium text-gray-700">単日運用：当日設定とリセット</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
+              onClick={async ()=>{
+                try {
+                  const res = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
+                  const d = res.data
+                  if (!d) { alert('当日設定が未登録です'); return }
+                  setDayDate(format(new Date(d.date), 'yyyy-MM-dd'))
+                  const cnt = Math.max(1, Math.min(8, d.courtCount||4))
+                  setDayCourtCount(cnt)
+                  setDayCourtNames(Array.from({ length: cnt }, (_, i)=> (d.courtNames?.[i]) || `Court${i+1}`))
+                  setDayStartMin(d.startMin ?? 9*60)
+                  setDayEndMin(d.endMin ?? 21*60)
+                  setDaySlotMinutes(d.slotMinutes ?? 30)
+                } catch {
+                  alert('当日設定の取得に失敗しました')
+                }
+              }}
+            >当日設定を読み込み</button>
+            <button
+              type="button"
+              className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+              onClick={async ()=>{
+                if (!pin) { alert('管理PINを入力してください'); return }
+                if (!confirm('当日の予約をすべて削除します。よろしいですか？')) return
+                try {
+                  const res = await axios.post('/api/day/reset', {}, { headers: { 'x-admin-pin': pin } })
+                  alert(`削除件数: ${res.data?.deleted ?? 0}`)
+                  await qc.invalidateQueries({ queryKey: ['all-res'] })
+                } catch (e: any) {
+                  if (e?.response?.status === 401) alert('管理PINを入力してください')
+                  else alert(e?.response?.data?.error ?? 'リセットに失敗しました')
+                }
+              }}
+            >当日の全予約を削除</button>
+          </div>
+        </div>
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">日付（YYYY-MM-DD）</label>
+            <input className="w-48 rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">コート数（1..8）</label>
+            <input className="w-28 rounded border px-2 py-1 text-sm" type="number" min={1} max={8} value={dayCourtCount} onChange={(e)=>{
+              const v = Math.max(1, Math.min(8, Number(e.target.value)||1));
+              setDayCourtCount(v);
+              setDayCourtNames(prev=>{
+                const next=[...prev];
+                if (v>next.length) { while(next.length<v) next.push(`Court${next.length+1}`) }
+                else if (v<next.length) { next.length=v }
+                return next;
+              })
+            }} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs text-gray-600">コート名</label>
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: dayCourtCount }).map((_,i)=> (
+                <input key={i} className="rounded border px-2 py-1 text-sm" value={dayCourtNames[i] || ''} onChange={(e)=>setDayCourtNames(prev=>{ const n=[...prev]; n[i]=e.target.value; return n })} />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 items-center gap-2 text-sm">
+            <label className="text-xs text-gray-600">開始</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayStartMin/60)).padStart(2,'0')}:${String(dayStartMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayStartMin(h*60+m) }} />
+            <label className="text-xs text-gray-600">終了</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayEndMin/60)).padStart(2,'0')}:${String(dayEndMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayEndMin(h*60+m) }} />
+            <label className="text-xs text-gray-600">枠（分）</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e)=>setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))} />
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              type="button"
+              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+              onClick={async ()=>{
+                if (!pin) { alert('管理PINを入力してください'); return }
+                // 軽いバリデーション
+                const aligned = (n:number)=> n%5===0
+                if (!aligned(dayStartMin) || !aligned(dayEndMin) || !aligned(daySlotMinutes)) { alert('開始・終了・枠（分）は5分単位で入力してください。'); return }
+                if (dayStartMin >= dayEndMin) { alert('開始時刻は終了時刻より前にしてください。'); return }
+                const range = dayEndMin - dayStartMin
+                if (range % daySlotMinutes !== 0) { alert('（終了-開始）は枠（分）で割り切れる必要があります'); return }
+                try {
+                  const names = Array.from({ length: dayCourtCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  await axios.put('/api/day', {
+                    date: dayDate,
+                    courtCount: dayCourtCount,
+                    courtNames: names,
+                    startMin: dayStartMin,
+                    endMin: dayEndMin,
+                    slotMinutes: daySlotMinutes,
+                  }, { headers: { 'x-admin-pin': pin } })
+                  alert('当日設定を保存しました')
+                } catch (e:any) {
+                  if (e?.response?.status === 401) alert('管理PINを入力してください')
+                  else alert(e?.response?.data?.error ?? '保存に失敗しました')
+                }
+              }}
+            >当日設定を保存</button>
+          </div>
         </div>
       </div>
 

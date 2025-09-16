@@ -11,6 +11,7 @@ const MAX_COURTS = 8
 export default function ReservePage() {
   const qc = useQueryClient()
   const [date, setDate] = useState<string>('-')
+  const [lastRefAt, setLastRefAt] = useState<Date | null>(null)
   const [selectedCourt, setSelectedCourt] = useState<number>(1)
   const [partySize, setPartySize] = useState(1)
   const [playerNames, setPlayerNames] = useState<string[]>([''])
@@ -58,7 +59,7 @@ export default function ReservePage() {
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
   const tempsRef = useRef<any[]>([])
   const [fastPoll, setFastPoll] = useState(false)
-  const { data: reservations } = useQuery({
+  const { data: reservations, isFetching: isResFetching } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
     queryFn: async () => {
@@ -84,6 +85,11 @@ export default function ReservePage() {
     refetchIntervalInBackground: false,
     staleTime: 30_000,
   })
+
+  // Record last refresh time whenever reservations data changes
+  useEffect(() => {
+    if (reservations !== undefined) setLastRefAt(new Date())
+  }, [reservations])
 
   // Merge current data with temps for UI calculations
   const currentWithTemps = () => {
@@ -277,12 +283,16 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         <div className="text-sm text-gray-500">コート数: {courtCount}</div>
         <button
           type="button"
-          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50"
+          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
+          disabled={isResFetching}
           onClick={async () => {
             await qc.invalidateQueries({ queryKey: ['reservations', date] })
             await qc.refetchQueries({ queryKey: ['reservations', date] })
+            setLastRefAt(new Date())
           }}
-        >更新</button>
+          aria-busy={isResFetching}
+        >{isResFetching ? '更新中…' : '更新'}</button>
+        <div className="text-xs text-gray-400">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
       </div>
 
       <div className="overflow-auto rounded border">
