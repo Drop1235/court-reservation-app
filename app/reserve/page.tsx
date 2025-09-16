@@ -70,6 +70,7 @@ export default function ReservePage() {
   const etagRef = useRef<string | null>(null)
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
   const tempsRef = useRef<any[]>([])
+  const [fastPoll, setFastPoll] = useState(false)
   const { data: reservations } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
@@ -83,6 +84,8 @@ export default function ReservePage() {
       const server = Array.isArray(res.data) ? res.data.slice() : []
       // Clean up temps that are now present in server data (use server list, not merged)
       tempsRef.current = tempsRef.current.filter((t) => !server.some((r: any) => r.id === t.id))
+      // Adjust polling speed based on presence of temps or ongoing mutation
+      setFastPoll(tempsRef.current.length > 0 || createMutation.isPending)
       const merged = server.slice()
       for (const t of tempsRef.current) {
         if (!merged.some((r: any) => r.id === t.id)) merged.push(t)
@@ -90,7 +93,7 @@ export default function ReservePage() {
       return merged
     },
     refetchOnWindowFocus: true,
-    refetchInterval: 10_000,
+    refetchInterval: fastPoll ? 3_000 : 10_000,
     refetchIntervalInBackground: true,
     staleTime: 30_000,
   })
@@ -130,6 +133,7 @@ export default function ReservePage() {
         __temp: true,
       }
       tempsRef.current = [...tempsRef.current.filter((x) => x.id !== tempId), temp]
+      setFastPoll(true)
       qc.setQueryData(['reservations', date], (prev: any) => {
         const list = Array.isArray(prev) ? prev.slice() : []
         list.push(temp)
@@ -144,6 +148,8 @@ export default function ReservePage() {
         || err?.message
         || '予約に失敗しました。他の方の予約と競合した可能性があります。時間や人数を変更して再度お試しください。'
       alert(msg)
+      // If no temps remain and no ongoing mutation, slow down
+      if (tempsRef.current.length === 0 && !createMutation.isPending) setFastPoll(false)
     },
     onSuccess: async (created: any, _vars, ctx) => {
       // Replace temp with server result (or append if temp not found)
@@ -181,6 +187,8 @@ export default function ReservePage() {
       }
       // Additionally let react-query do a standard refetch for consistency
       await qc.refetchQueries({ queryKey: ['reservations', date] })
+      // If temps are cleared, allow poll to slow down
+      if (tempsRef.current.length === 0 && !createMutation.isPending) setFastPoll(false)
     },
   })
 
