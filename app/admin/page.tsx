@@ -46,6 +46,35 @@ export default function AdminPage() {
   const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
   const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
   const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
+  const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number } | null>(null)
+
+  // Auto-load day config on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
+        const d = res.data
+        if (!d) return
+        const loaded = {
+          date: format(new Date(d.date), 'yyyy-MM-dd'),
+          courtCount: Math.max(1, Math.min(8, d.courtCount || 4)),
+          courtNames: Array.from({ length: Math.max(1, Math.min(8, d.courtCount || 4)) }, (_, i) => (d.courtNames?.[i]) || `Court${i + 1}`),
+          startMin: d.startMin ?? 9 * 60,
+          endMin: d.endMin ?? 21 * 60,
+          slotMinutes: d.slotMinutes ?? 30,
+        }
+        lastLoadedRef.current = loaded
+        setDayDate(loaded.date)
+        setDayCourtCount(loaded.courtCount)
+        setDayCourtNames(loaded.courtNames)
+        setDayStartMin(loaded.startMin)
+        setDayEndMin(loaded.endMin)
+        setDaySlotMinutes(loaded.slotMinutes)
+      } catch {
+        // silent; admin can input and save
+      }
+    })()
+  }, [])
 
   // load PIN from sessionStorage
   useEffect(() => {
@@ -97,26 +126,6 @@ export default function AdminPage() {
         <div className="flex items-center justify-between gap-2 border-b p-3">
           <div className="text-sm font-medium text-gray-700">単日運用：当日設定とリセット</div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
-              onClick={async ()=>{
-                try {
-                  const res = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
-                  const d = res.data
-                  if (!d) { alert('当日設定が未登録です'); return }
-                  setDayDate(format(new Date(d.date), 'yyyy-MM-dd'))
-                  const cnt = Math.max(1, Math.min(8, d.courtCount||4))
-                  setDayCourtCount(cnt)
-                  setDayCourtNames(Array.from({ length: cnt }, (_, i)=> (d.courtNames?.[i]) || `Court${i+1}`))
-                  setDayStartMin(d.startMin ?? 9*60)
-                  setDayEndMin(d.endMin ?? 21*60)
-                  setDaySlotMinutes(d.slotMinutes ?? 30)
-                } catch {
-                  alert('当日設定の取得に失敗しました')
-                }
-              }}
-            >当日設定を読み込み</button>
             <button
               type="button"
               className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50"
@@ -192,6 +201,15 @@ export default function AdminPage() {
                     slotMinutes: daySlotMinutes,
                   }, { headers: { 'x-admin-pin': pin } })
                   alert('当日設定を保存しました')
+                  // snapshot last loaded as saved
+                  lastLoadedRef.current = {
+                    date: dayDate,
+                    courtCount: dayCourtCount,
+                    courtNames: names,
+                    startMin: dayStartMin,
+                    endMin: dayEndMin,
+                    slotMinutes: daySlotMinutes,
+                  }
                 } catch (e:any) {
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '保存に失敗しました')
