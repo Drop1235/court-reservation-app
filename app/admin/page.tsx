@@ -32,12 +32,49 @@ export default function AdminPage() {
   const [q, setQ] = useState('')
   const [pin, setPin] = useState('')
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
-  const [bulkCutoff, setBulkCutoff] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
+  // removed: past bulk delete cutoff
   const [settingCount, setSettingCount] = useState<number>(4)
   const [settingNames, setSettingNames] = useState<string[]>(['Court1', 'Court2', 'Court3', 'Court4'])
   const [startMin, setStartMin] = useState<number>(9 * 60)
   const [endMin, setEndMin] = useState<number>(21 * 60)
   const [slotMinutes, setSlotMinutes] = useState<number>(30)
+
+  // single-day admin state
+  const [dayDate, setDayDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
+  const [dayCourtCount, setDayCourtCount] = useState<number>(4)
+  const [dayCourtNames, setDayCourtNames] = useState<string[]>(['Court1','Court2','Court3','Court4'])
+  const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
+  const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
+  const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
+  const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number } | null>(null)
+
+  // Auto-load day config on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
+        const d = res.data
+        if (!d) return
+        const loaded = {
+          date: format(new Date(d.date), 'yyyy-MM-dd'),
+          courtCount: Math.max(1, Math.min(8, d.courtCount || 4)),
+          courtNames: Array.from({ length: Math.max(1, Math.min(8, d.courtCount || 4)) }, (_, i) => (d.courtNames?.[i]) || `Court${i + 1}`),
+          startMin: d.startMin ?? 9 * 60,
+          endMin: d.endMin ?? 21 * 60,
+          slotMinutes: d.slotMinutes ?? 30,
+        }
+        lastLoadedRef.current = loaded
+        setDayDate(loaded.date)
+        setDayCourtCount(loaded.courtCount)
+        setDayCourtNames(loaded.courtNames)
+        setDayStartMin(loaded.startMin)
+        setDayEndMin(loaded.endMin)
+        setDaySlotMinutes(loaded.slotMinutes)
+      } catch {
+        // silent; admin can input and save
+      }
+    })()
+  }, [])
 
   // load PIN from sessionStorage
   useEffect(() => {
@@ -66,74 +103,7 @@ export default function AdminPage() {
     },
   })
 
-  // load current court setting for date
-  const loadSetting = useMemo(
-    () => async () => {
-      try {
-        const res = await axios.get('/api/admin/court-setting', { params: { date: settingDate } })
-        const s = res.data
-        if (!s) {
-          setSettingCount(4)
-          setSettingNames(['Court1', 'Court2', 'Court3', 'Court4'])
-          setStartMin(9 * 60)
-          setEndMin(21 * 60)
-          setSlotMinutes(30)
-        } else {
-          setSettingCount(s.courtCount)
-          setSettingNames(s.courtNames)
-          setStartMin(s.startMin ?? 9 * 60)
-          setEndMin(s.endMin ?? 21 * 60)
-          setSlotMinutes(s.slotMinutes ?? 30)
-        }
-      } catch (e) {
-        alert('コート設定の読込に失敗しました')
-      }
-    },
-    [settingDate]
-  )
-
-  useEffect(() => {
-    loadSetting()
-  }, [loadSetting])
-
-  const saveSetting = async () => {
-    try {
-      const names = Array.from({ length: settingCount }, (_, i) => settingNames[i] || `Court${i + 1}`)
-      // Client-side validation for time range and slot minutes
-      const aligned = (n: number) => n % 5 === 0
-      if (!aligned(startMin) || !aligned(endMin) || !aligned(slotMinutes)) {
-        alert('開始・終了・枠（分）は5分単位で入力してください。')
-        return
-      }
-      if (startMin >= endMin) {
-        alert('開始時刻は終了時刻より前にしてください。')
-        return
-      }
-      const range = endMin - startMin
-      if (range % slotMinutes !== 0) {
-        // 提案: 指定レンジを割り切れる候補を提示
-        const candidates = Array.from({ length: 240 / 5 }, (_, i) => (i + 1) * 5).filter((m) => m >= 5 && m <= 240 && range % m === 0)
-        const suggestion = candidates.length > 0 ? `（例: ${candidates.filter((m)=>[10,15,20,30,40,45,60,90,120].includes(m)).join(', ') || candidates.slice(0,6).join(', ')}）` : ''
-        alert(`「終了-開始」が枠（分）で割り切れる必要があります。
-範囲: ${Math.floor(range/60)}時間${range%60}分 / 現在の枠: ${slotMinutes}分 は不正です。
-割り切れる枠の候補 ${suggestion}`)
-        return
-      }
-      await axios.post(
-        '/api/admin/court-setting',
-        { date: settingDate, courtCount: settingCount, courtNames: names, startMin, endMin, slotMinutes },
-        { headers: { 'x-admin-pin': pin } }
-      )
-      alert('保存しました')
-      qc.invalidateQueries({ queryKey: ['reservations'] })
-    } catch (e: any) {
-      if (e?.response?.status === 401) {
-        alert('管理PINを入力してください')
-      } else {
-        alert(e?.response?.data?.error ?? '保存に失敗しました')
-      }
-    }
-  }
+  // removed: legacy per-date court setting editor (now replaced by single-day controls)
 
   return (
     <div className="space-y-4">
@@ -147,140 +117,116 @@ export default function AdminPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <label className="text-gray-600">過去予約一括削除の基準日</label>
-            <input type="date" className="rounded border px-2 py-1" value={bulkCutoff} onChange={(e)=>setBulkCutoff(e.target.value)} />
+          <div className="text-xs text-gray-500">{data?.length ?? 0} 件</div>
+        </div>
+      </div>
+
+      {/* Single-day controls */}
+      <div className="rounded-lg border bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-2 border-b p-3">
+          <div className="text-sm font-medium text-gray-700">単日運用：当日設定とリセット</div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700"
+              className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50"
               onClick={async ()=>{
-                if (!confirm(`${bulkCutoff} より前の予約をすべて削除します。よろしいですか？`)) return
+                if (!pin) { alert('管理PINを入力してください'); return }
+                if (!confirm('当日の予約をすべて削除します。よろしいですか？')) return
                 try {
-                  // Optimistically hide all rows older than cutoff
-                  const cutoff = new Date(bulkCutoff + 'T00:00:00.000Z').getTime()
-                  const toHide: string[] = (Array.isArray(data) ? data : [])
-                    .filter((r: any) => new Date(r.date).getTime() < cutoff)
-                    .map((r: any) => r.id)
-                  for (const id of toHide) deletedRef.current.add(id)
-                  qc.setQueryData(['all-res'], (prev: any) => Array.isArray(prev) ? prev.filter((r: any) => !deletedRef.current.has(r.id)) : prev)
-                  const res = await axios.post('/api/admin/bulk-delete-past', { before: bulkCutoff + 'T00:00:00.000Z' }, { headers: { 'x-admin-pin': pin } })
-                  alert(`削除件数: ${res.data.deleted}`)
-                  // Cache-busting fetch to avoid stale CDN/browser cache
-                  const fresh = await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-                  const filtered = (Array.isArray(fresh.data) ? fresh.data : []).filter((r: any) => !deletedRef.current.has(r.id))
-                  qc.setQueryData(['all-res'], filtered)
-                  await qc.refetchQueries({ queryKey: ['all-res'] })
+                  const res = await axios.post('/api/day/reset', {}, { headers: { 'x-admin-pin': pin } })
+                  alert(`削除件数: ${res.data?.deleted ?? 0}`)
+                  await qc.invalidateQueries({ queryKey: ['all-res'] })
                 } catch (e: any) {
-                  // Rollback optimistic hide on failure
-                  deletedRef.current.clear()
-                  qc.invalidateQueries({ queryKey: ['all-res'] })
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
-                  else alert(e?.response?.data?.error ?? '一括削除に失敗しました')
+                  else alert(e?.response?.data?.error ?? 'リセットに失敗しました')
                 }
               }}
-            >過去予約を一括削除</button>
+            >当日の全予約を削除</button>
           </div>
-          <div className="text-xs text-gray-500">{data?.length ?? 0} 件</div>
+        </div>
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">日付（YYYY-MM-DD）</label>
+            <input className="w-48 rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">コート数（1..8）</label>
+            <input className="w-28 rounded border px-2 py-1 text-sm" type="number" min={1} max={8} value={dayCourtCount} onChange={(e)=>{
+              const v = Math.max(1, Math.min(8, Number(e.target.value)||1));
+              setDayCourtCount(v);
+              setDayCourtNames(prev=>{
+                const next=[...prev];
+                if (v>next.length) { while(next.length<v) next.push(`Court${next.length+1}`) }
+                else if (v<next.length) { next.length=v }
+                return next;
+              })
+            }} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs text-gray-600">コート名</label>
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: dayCourtCount }).map((_,i)=> (
+                <input key={i} className="rounded border px-2 py-1 text-sm" value={dayCourtNames[i] || ''} onChange={(e)=>setDayCourtNames(prev=>{ const n=[...prev]; n[i]=e.target.value; return n })} />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 items-center gap-2 text-sm">
+            <label className="text-xs text-gray-600">開始</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayStartMin/60)).padStart(2,'0')}:${String(dayStartMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayStartMin(h*60+m) }} />
+            <label className="text-xs text-gray-600">終了</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayEndMin/60)).padStart(2,'0')}:${String(dayEndMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayEndMin(h*60+m) }} />
+            <label className="text-xs text-gray-600">枠（分）</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e)=>setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))} />
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              type="button"
+              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+              onClick={async ()=>{
+                if (!pin) { alert('管理PINを入力してください'); return }
+                // 軽いバリデーション
+                const aligned = (n:number)=> n%5===0
+                if (!aligned(dayStartMin) || !aligned(dayEndMin) || !aligned(daySlotMinutes)) { alert('開始・終了・枠（分）は5分単位で入力してください。'); return }
+                if (dayStartMin >= dayEndMin) { alert('開始時刻は終了時刻より前にしてください。'); return }
+                const range = dayEndMin - dayStartMin
+                if (range % daySlotMinutes !== 0) { alert('（終了-開始）は枠（分）で割り切れる必要があります'); return }
+                try {
+                  const names = Array.from({ length: dayCourtCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  await axios.put('/api/day', {
+                    date: dayDate,
+                    courtCount: dayCourtCount,
+                    courtNames: names,
+                    startMin: dayStartMin,
+                    endMin: dayEndMin,
+                    slotMinutes: daySlotMinutes,
+                  }, { headers: { 'x-admin-pin': pin } })
+                  alert('当日設定を保存しました')
+                  // snapshot last loaded as saved
+                  lastLoadedRef.current = {
+                    date: dayDate,
+                    courtCount: dayCourtCount,
+                    courtNames: names,
+                    startMin: dayStartMin,
+                    endMin: dayEndMin,
+                    slotMinutes: daySlotMinutes,
+                  }
+                } catch (e:any) {
+                  if (e?.response?.status === 401) alert('管理PINを入力してください')
+                  else alert(e?.response?.data?.error ?? '保存に失敗しました')
+                }
+              }}
+            >当日設定を保存</button>
+          </div>
         </div>
       </div>
 
       <div className="rounded-lg border bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm text-gray-600">設定</div>
+          <div className="text-sm font-medium text-gray-700">予約一覧</div>
           <div className="flex items-center gap-2">
-            <input
-              className="w-56 rounded border px-3 py-1 text-sm"
-              type="search"
-              placeholder="予約検索（日時・コート・氏名など）"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <button
-              type="button"
-              className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
-              onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}
-            >
-              更新
-            </button>
+            <input className="w-56 rounded border px-3 py-1 text-sm" type="search" placeholder="予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
+            <button type="button" className="rounded border px-2 py-1 text-sm hover:bg-gray-50" onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}>更新</button>
           </div>
-        </div>
-        <div className="grid gap-4 border-b p-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <div className="text-sm font-medium">コート設定（管理者のみ）</div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600">日付</label>
-                <input className="rounded border px-2 py-1 text-sm" type="date" value={settingDate} onChange={(e) => setSettingDate(e.target.value)} />
-                <button type="button" className="rounded border px-2 py-1 text-sm hover:bg-gray-50" onClick={loadSetting}>読込</button>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600">コート数</label>
-                <input
-                  className="w-20 rounded border px-2 py-1 text-sm"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={settingCount}
-                  onChange={(e) => setSettingCount(Math.max(1, Math.min(8, Number(e.target.value) || 1)))}
-                />
-                <button type="button" className="rounded border px-2 py-1 text-sm hover:bg-gray-50" onClick={() => setSettingNames((prev) => {
-                  const next = [...prev]
-                  if (settingCount > next.length) { while (next.length < settingCount) next.push(`Court${next.length + 1}`) }
-                  else if (settingCount < next.length) { next.length = settingCount }
-                  return next
-                })}>反映</button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {Array.from({ length: settingCount }).map((_, i) => (
-                  <input
-                    key={i}
-                    className="rounded border px-2 py-1 text-sm"
-                    placeholder={`Court${i + 1}`}
-                    value={settingNames[i] || ''}
-                    onChange={(e) => setSettingNames((prev) => { const n = [...prev]; n[i] = e.target.value; return n })}
-                  />
-                ))}
-              </div>
-              <div>
-                <button type="button" className="mt-1 rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700" onClick={saveSetting}>保存</button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-medium">時間設定</div>
-              <div className="grid grid-cols-3 items-center gap-2 text-sm">
-                <label className="text-xs text-gray-600">開始</label>
-                <input
-                  className="col-span-2 rounded border px-2 py-1"
-                  type="time"
-                  step={300}
-                  value={`${String(Math.floor(startMin/60)).padStart(2,'0')}:${String(startMin%60).padStart(2,'0')}`}
-                  onChange={(e) => {
-                    const [h,m] = e.target.value.split(':').map(Number)
-                    setStartMin(h*60+m)
-                  }}
-                />
-                <label className="text-xs text-gray-600">終了</label>
-                <input
-                  className="col-span-2 rounded border px-2 py-1"
-                  type="time"
-                  step={300}
-                  value={`${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`}
-                  onChange={(e) => {
-                    const [h,m] = e.target.value.split(':').map(Number)
-                    setEndMin(h*60+m)
-                  }}
-                />
-                <label className="text-xs text-gray-600">枠（分）</label>
-                <input
-                  className="col-span-2 rounded border px-2 py-1"
-                  type="number"
-                  min={5}
-                  step={5}
-                  value={slotMinutes}
-                  onChange={(e) => setSlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))}
-                />
-              </div>
-              <p className="text-xs text-gray-500">5分単位。開始＜終了、かつ（終了-開始）は枠分数で割り切れるようにしてください。</p>
-            </div>
         </div>
         {(!data || data.length === 0) ? (
           <div className="p-6 text-center text-sm text-gray-500">予約はありません</div>

@@ -10,7 +10,8 @@ const MAX_COURTS = 8
 
 export default function ReservePage() {
   const qc = useQueryClient()
-  const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [date, setDate] = useState<string>('-')
+  const [lastRefAt, setLastRefAt] = useState<Date | null>(null)
   const [selectedCourt, setSelectedCourt] = useState<number>(1)
   const [partySize, setPartySize] = useState(1)
   const [playerNames, setPlayerNames] = useState<string[]>([''])
@@ -24,39 +25,26 @@ export default function ReservePage() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // Load court settings per date (read-only)
+  // Single-day mode: fetch active day config once
+  const { data: dayCfg } = useQuery({
+    queryKey: ['day'],
+    queryFn: async () => (await axios.get('/api/day')).data,
+    staleTime: 5 * 60 * 1000,
+  })
   useEffect(() => {
-    ;(async () => {
-      try {
-        const res = await axios.get('/api/admin/court-setting', { params: { date } })
-        const data = res.data
-        if (data && typeof data.courtCount === 'number' && Array.isArray(data.courtNames)) {
-          const cnt = Math.min(Math.max(data.courtCount, 1), MAX_COURTS)
-          setCourtCount(cnt)
-          const names = data.courtNames.slice(0, cnt)
-          setCourtNames(names.length === cnt ? names : Array.from({ length: cnt }, (_, i) => names[i] || `Court${i + 1}`))
-          if (typeof data.startMin === 'number') setStartMin(data.startMin)
-          else setStartMin(DEFAULT_START_MIN)
-          if (typeof data.endMin === 'number') setEndMin(data.endMin)
-          else setEndMin(DEFAULT_END_MIN)
-          if (typeof data.slotMinutes === 'number') setSlotMinutes(data.slotMinutes)
-          else setSlotMinutes(DEFAULT_SLOT_MINUTES)
-        } else {
-          setCourtCount(DEFAULT_COURT_COUNT)
-          setCourtNames(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
-          setStartMin(DEFAULT_START_MIN)
-          setEndMin(DEFAULT_END_MIN)
-          setSlotMinutes(DEFAULT_SLOT_MINUTES)
-        }
-      } catch {
-        setCourtCount(DEFAULT_COURT_COUNT)
-        setCourtNames(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
-        setStartMin(DEFAULT_START_MIN)
-        setEndMin(DEFAULT_END_MIN)
-        setSlotMinutes(DEFAULT_SLOT_MINUTES)
-      }
-    })()
-  }, [date])
+    if (!dayCfg) return
+    try {
+      const dstr = format(new Date(dayCfg.date), 'yyyy-MM-dd')
+      setDate(dstr)
+      const cnt = Math.min(Math.max(dayCfg.courtCount ?? DEFAULT_COURT_COUNT, 1), MAX_COURTS)
+      setCourtCount(cnt)
+      const names = Array.isArray(dayCfg.courtNames) ? dayCfg.courtNames.slice(0, cnt) : []
+      setCourtNames(names.length === cnt ? names : Array.from({ length: cnt }, (_, i) => names[i] || `Court${i + 1}`))
+      setStartMin(typeof dayCfg.startMin === 'number' ? dayCfg.startMin : DEFAULT_START_MIN)
+      setEndMin(typeof dayCfg.endMin === 'number' ? dayCfg.endMin : DEFAULT_END_MIN)
+      setSlotMinutes(typeof dayCfg.slotMinutes === 'number' ? dayCfg.slotMinutes : DEFAULT_SLOT_MINUTES)
+    } catch {}
+  }, [dayCfg])
 
   // keep selectedCourt in range
   useEffect(() => {
@@ -71,7 +59,7 @@ export default function ReservePage() {
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
   const tempsRef = useRef<any[]>([])
   const [fastPoll, setFastPoll] = useState(false)
-  const { data: reservations } = useQuery({
+  const { data: reservations, isFetching: isResFetching } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
     queryFn: async () => {
@@ -93,10 +81,15 @@ export default function ReservePage() {
       return merged
     },
     refetchOnWindowFocus: true,
-    refetchInterval: fastPoll ? 3_000 : 10_000,
-    refetchIntervalInBackground: true,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
     staleTime: 30_000,
   })
+
+  // Record last refresh time whenever reservations data changes
+  useEffect(() => {
+    if (reservations !== undefined) setLastRefAt(new Date())
+  }, [reservations])
 
   // Merge current data with temps for UI calculations
   const currentWithTemps = () => {
@@ -286,13 +279,20 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
   return (
     <div className="p-4">
       <div className="mb-3 flex items-center gap-2">
-        <input
-          type="date"
-          className="rounded border px-2 py-1"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
+        <div className="rounded border px-2 py-1 text-sm bg-white">{date || '-'}</div>
         <div className="text-sm text-gray-500">コート数: {courtCount}</div>
+        <button
+          type="button"
+          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
+          disabled={isResFetching}
+          onClick={async () => {
+            await qc.invalidateQueries({ queryKey: ['reservations', date] })
+            await qc.refetchQueries({ queryKey: ['reservations', date] })
+            setLastRefAt(new Date())
+          }}
+          aria-busy={isResFetching}
+        >{isResFetching ? '更新中…' : '更新'}</button>
+        <div className="text-xs text-gray-400">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
       </div>
 
       <div className="overflow-auto rounded border">
