@@ -224,18 +224,28 @@ export default function ReservePage() {
 
 
 const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0 }: any) => {
-  if (!isAvailable) return <div className="h-full bg-gray-100" />
-  if (isFull) return <div className="flex h-full items-center justify-center bg-gray-100 text-xs text-gray-400">×</div>
-  
+  // Background color cues by capacity / availability
+  const capacityBg = !isAvailable
+    ? 'bg-gray-100'
+    : used === 0
+      ? 'bg-white'
+      : used >= 4
+        ? 'bg-gray-100'
+        : 'bg-green-50'
+
+  // Border hint for temp rows
+  const tempStyles = isTemp ? 'bg-blue-50 border border-blue-200' : ''
+
   return (
     <div className="relative h-full">
       <button
         type="button"
-        className={`h-full w-full p-1 text-left text-xs hover:bg-gray-50 ${
-          isSelected ? 'bg-blue-50' : ''
-        } ${isTemp ? 'bg-blue-50 border border-blue-200' : ''}`}
-        onClick={onClick}
+        className={`relative h-full w-full p-1 text-left text-xs ${capacityBg} ${
+          isSelected ? 'ring-2 ring-blue-300' : ''
+        } ${tempStyles}`}
+        onClick={(isFull || !isAvailable) ? undefined : onClick}
         aria-busy={isTemp}
+        aria-disabled={isFull || !isAvailable}
       >
         {isTemp && (
           <span className="absolute -top-2 -right-1 bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap">
@@ -278,8 +288,11 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       </div>
 
       <div className="overflow-auto rounded border">
-        <div className="min-w-[680px]">
-          <div className="grid grid-cols-[80px_repeat(var(--cols),1fr)]" style={{ ['--cols' as any]: courtCount }}>
+        <div className="min-w-[360px] sm:min-w-[680px]">
+          <div
+            className="grid [grid-template-columns:64px_repeat(var(--cols),90px)] sm:[grid-template-columns:80px_repeat(var(--cols),minmax(0,1fr))]"
+            style={{ ['--cols' as any]: courtCount }}
+          >
             <div className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
               <div key={`h-${i}`} className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600 text-center">
