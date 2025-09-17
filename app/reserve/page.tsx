@@ -45,9 +45,6 @@ export default function ReservePage() {
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [qc])
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [qc])
 
   useEffect(() => {
     if (!dayCfg) return
