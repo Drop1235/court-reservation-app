@@ -115,12 +115,20 @@ export default function ReservePage() {
     refetchInterval: false,
     refetchIntervalInBackground: false,
     staleTime: 30_000,
+    // Avoid firing before day config sets a valid date
+    enabled: !!date && date !== '-',
   })
 
   // Record last refresh time whenever reservations data changes
   useEffect(() => {
     if (reservations !== undefined) setLastRefAt(new Date())
   }, [reservations])
+
+  // When the date changes, reset ETag and temporary optimistic entries to avoid stale 304 caches
+  useEffect(() => {
+    etagRef.current = null
+    tempsRef.current = []
+  }, [date])
 
   // Merge current data with temps for UI calculations
   const currentWithTemps = () => {
