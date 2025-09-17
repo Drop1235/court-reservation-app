@@ -252,10 +252,16 @@ export default function AdminPage() {
                 const range = dayEndMin - dayStartMin
                 if (range % daySlotMinutes !== 0) { alert('（終了-開始）は枠（分）で割り切れる必要があります'); return }
                 try {
-                  const names = Array.from({ length: dayCourtCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  // Finalize court count using the current input value (handles case when blur hasn't fired)
+                  const nInput = Number(dayCourtCountInput)
+                  const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(8, nInput)) : dayCourtCount
+                  // Sync local states to the finalized value
+                  if (finalizedCount !== dayCourtCount) setDayCourtCount(finalizedCount)
+                  if (String(finalizedCount) !== dayCourtCountInput) setDayCourtCountInput(String(finalizedCount))
+                  const names = Array.from({ length: finalizedCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
                   await axios.put('/api/day', {
                     date: dayDate,
-                    courtCount: dayCourtCount,
+                    courtCount: finalizedCount,
                     courtNames: names,
                     startMin: dayStartMin,
                     endMin: dayEndMin,
@@ -265,12 +271,18 @@ export default function AdminPage() {
                   // snapshot last loaded as saved
                   lastLoadedRef.current = {
                     date: dayDate,
-                    courtCount: dayCourtCount,
+                    courtCount: finalizedCount,
                     courtNames: names,
                     startMin: dayStartMin,
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
                   }
+                  // Ensure names state length matches finalized count
+                  setDayCourtNames(prev=>{ const next=[...prev]; if (finalizedCount>next.length) { while(next.length<finalizedCount) next.push(String.fromCharCode(65+next.length)) } else if (finalizedCount<next.length) { next.length=finalizedCount } return next })
+                  // Proactively fetch fresh config to warm caches and update ETag
+                  try { await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
+                  // Notify other tabs/pages to refetch day config
+                  try { if (typeof window !== 'undefined') localStorage.setItem('dayCfgUpdated', String(Date.now())) } catch {}
                 } catch (e:any) {
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '保存に失敗しました')

@@ -32,6 +32,23 @@ export default function ReservePage() {
     staleTime: 0,
     refetchOnWindowFocus: true,
   })
+  // React to admin saves from other tabs/windows via localStorage broadcast
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dayCfgUpdated') {
+        qc.invalidateQueries({ queryKey: ['day'] })
+        qc.refetchQueries({ queryKey: ['day'] })
+        setLastRefAt(new Date())
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [qc])
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [qc])
+
   useEffect(() => {
     if (!dayCfg) return
     try {
@@ -310,6 +327,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
           disabled={isResFetching}
           onClick={async () => {
+            await qc.invalidateQueries({ queryKey: ['day'] })
+            await qc.refetchQueries({ queryKey: ['day'] })
             await qc.invalidateQueries({ queryKey: ['reservations', date] })
             await qc.refetchQueries({ queryKey: ['reservations', date] })
             setLastRefAt(new Date())
