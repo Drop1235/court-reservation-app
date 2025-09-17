@@ -240,12 +240,14 @@ export async function POST(req: Request) {
       })
 
       // Compare using normalized names to absorb width/space variations
-      const cleanedSet = new Set(cleaned.map((n) => n))
+      // Special rule: the name 'コーチ' is excluded from duplicate checks
+      const cleanedSet = new Set(cleaned.filter((n) => n !== 'コーチ'))
       const conflict = existingActive.some((r) => {
         // Access playerNames with a safe cast to tolerate stale Prisma types
         const names = (r as any).playerNames as string[] | undefined
         const norm = normalizeNames(Array.isArray(names) ? names : [])
-        return norm.some((n) => cleanedSet.has(n))
+        // exclude 'コーチ' from comparison on existing as well
+        return norm.some((n) => n !== 'コーチ' && cleanedSet.has(n))
       })
 
       if (conflict) {

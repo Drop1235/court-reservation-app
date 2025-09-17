@@ -42,7 +42,8 @@ export default function AdminPage() {
   // single-day admin state
   const [dayDate, setDayDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
   const [dayCourtCount, setDayCourtCount] = useState<number>(4)
-  const [dayCourtNames, setDayCourtNames] = useState<string[]>(['Court1','Court2','Court3','Court4'])
+  const [dayCourtCountInput, setDayCourtCountInput] = useState<string>('4')
+  const [dayCourtNames, setDayCourtNames] = useState<string[]>(['A','B','C','D'])
   const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
   const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
   const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
@@ -66,6 +67,7 @@ export default function AdminPage() {
         lastLoadedRef.current = loaded
         setDayDate(loaded.date)
         setDayCourtCount(loaded.courtCount)
+        setDayCourtCountInput(String(loaded.courtCount))
         setDayCourtNames(loaded.courtNames)
         setDayStartMin(loaded.startMin)
         setDayEndMin(loaded.endMin)
@@ -87,6 +89,20 @@ export default function AdminPage() {
     sessionStorage.setItem('adminPin', pin)
   }, [pin])
   const [confirmTarget, setConfirmTarget] = useState<any | null>(null)
+  const [hiddenDayKey, setHiddenDayKey] = useState<string | null>(null)
+  const [isResetting, setIsResetting] = useState<boolean>(false)
+
+  // Helper for UTC date key
+  const dateKeyUTC = (d: any) => {
+    try { return new Date(d).toISOString().slice(0,10) } catch { return '' }
+  }
+
+  // Data visible in table (apply hiddenDayKey immediately)
+  const visibleData = useMemo(() => {
+    const base = Array.isArray(data) ? data : []
+    if (!hiddenDayKey) return base
+    return base.filter((r: any) => dateKeyUTC(r.date) !== hiddenDayKey)
+  }, [data, hiddenDayKey])
 
   const del = useMutation({
     mutationFn: async (id: string) => (await axios.delete(`/api/admin/force-delete/${id}`, { headers: { 'x-admin-pin': pin } })).data,
@@ -117,7 +133,7 @@ export default function AdminPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
-          <div className="text-xs text-gray-500">{data?.length ?? 0} 件</div>
+          <div className="text-xs text-gray-500">{Array.isArray(visibleData) ? visibleData.length : 0} 件</div>
         </div>
       </div>
 
@@ -128,20 +144,51 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+              className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+              disabled={isResetting}
               onClick={async ()=>{
                 if (!pin) { alert('管理PINを入力してください'); return }
                 if (!confirm('当日の予約をすべて削除します。よろしいですか？')) return
+                setIsResetting(true)
+                // First, compute a best-effort todayKey synchronously and hide immediately
+                const guessKey = (()=>{ try { return new Date(lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return dayDate } })()
+                setHiddenDayKey(guessKey)
+                // In parallel, get the exact day from server to guarantee match with API
+                const dayCfg = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }).then(r=>r.data).catch(()=>null)
+                const todayKey = (()=>{ try { return new Date(dayCfg?.date ?? lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return guessKey } })()
+                if (todayKey !== guessKey) setHiddenDayKey(todayKey)
                 try {
+                  // Force immediate hide in UI regardless of react-query timings
+                  const prev = qc.getQueryData(['all-res']) as any[] | undefined
+                  const idsToHide: string[] = (Array.isArray(prev) ? prev : [])
+                    .filter((r: any) => dateKeyUTC(r.date) === todayKey)
+                    .map((r: any) => r.id)
+                  for (const id of idsToHide) deletedRef.current.add(id)
+                  // Immediately filter by UTC date key so UI updates at once even if timezone differs
+                  qc.setQueryData(['all-res'], (list: any) => Array.isArray(list) ? list.filter((r: any) => dateKeyUTC(r.date) !== todayKey) : list)
+
+                  // Server-side reset
                   const res = await axios.post('/api/day/reset', {}, { headers: { 'x-admin-pin': pin } })
+                  // Strong sync: fetch fresh list and keep hidden ids filtered
+                  try {
+                    const fresh = await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
+                    const filtered = (Array.isArray(fresh.data) ? fresh.data : []).filter((r: any) => dateKeyUTC(r.date) !== todayKey)
+                    qc.setQueryData(['all-res'], filtered)
+                  } catch {}
+                  await qc.refetchQueries({ queryKey: ['all-res'] })
+                  // Clear hiddenDayKey after successful sync
+                  setHiddenDayKey(null)
                   alert(`削除件数: ${res.data?.deleted ?? 0}`)
-                  await qc.invalidateQueries({ queryKey: ['all-res'] })
                 } catch (e: any) {
+                  // Rollback optimistic hide on failure
+                  deletedRef.current.clear()
+                  setHiddenDayKey(null)
+                  qc.invalidateQueries({ queryKey: ['all-res'] })
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? 'リセットに失敗しました')
-                }
+                } finally { setIsResetting(false) }
               }}
-            >当日の全予約を削除</button>
+            >{isResetting ? '削除中…' : '当日の全予約を削除'}</button>
           </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
@@ -151,16 +198,30 @@ export default function AdminPage() {
           </div>
           <div className="space-y-2">
             <label className="block text-xs text-gray-600">コート数（1..8）</label>
-            <input className="w-28 rounded border px-2 py-1 text-sm" type="number" min={1} max={8} value={dayCourtCount} onChange={(e)=>{
-              const v = Math.max(1, Math.min(8, Number(e.target.value)||1));
-              setDayCourtCount(v);
-              setDayCourtNames(prev=>{
-                const next=[...prev];
-                if (v>next.length) { while(next.length<v) next.push(`Court${next.length+1}`) }
-                else if (v<next.length) { next.length=v }
-                return next;
-              })
-            }} />
+            <input
+              className="w-28 rounded border px-2 py-1 text-sm"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={8}
+              value={dayCourtCountInput}
+              onChange={(e)=>{
+                // allow temporary empty/partial values while typing
+                setDayCourtCountInput(e.target.value)
+              }}
+              onBlur={(e)=>{
+                const n = Number(e.target.value)
+                const v = Number.isFinite(n) ? Math.max(1, Math.min(8, n)) : 1
+                setDayCourtCount(v)
+                setDayCourtCountInput(String(v))
+                setDayCourtNames(prev=>{
+                  const next=[...prev]
+                  if (v>next.length) { while(next.length<v) next.push(String.fromCharCode(65 + next.length)) }
+                  else if (v<next.length) { next.length=v }
+                  return next
+                })
+              }}
+            />
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs text-gray-600">コート名</label>
@@ -228,7 +289,7 @@ export default function AdminPage() {
             <button type="button" className="rounded border px-2 py-1 text-sm hover:bg-gray-50" onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}>更新</button>
           </div>
         </div>
-        {(!data || data.length === 0) ? (
+        {(!visibleData || visibleData.length === 0) ? (
           <div className="p-6 text-center text-sm text-gray-500">予約はありません</div>
         ) : (
           <div className="overflow-auto">
@@ -244,7 +305,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {(data ?? []).filter((r: any) => {
+                {(visibleData ?? []).filter((r: any) => {
                   if (!q.trim()) return true
                   const key = [
                     format(new Date(r.date), 'yyyy-MM-dd'),
@@ -266,7 +327,15 @@ export default function AdminPage() {
                     <td className="px-3 py-2 align-top">
                       <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">{r.partySize} 名</span>
                     </td>
-                    <td className="px-3 py-2 whitespace-pre-line align-top">{(r.playerNames ?? []).join('\n')}</td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="overflow-x-auto max-w-[220px] sm:max-w-none">
+                        <div className="inline-block min-w-max">
+                          {(r.playerNames ?? []).map((name: string, idx: number) => (
+                            <div key={idx} className="whitespace-nowrap">{name}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right align-top">
                       <button
                         type="button"

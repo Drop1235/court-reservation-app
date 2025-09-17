@@ -21,18 +21,31 @@ async function getActiveDayConfig() {
 export async function GET(req: Request) {
   try {
     const cfg = await getActiveDayConfig()
-    const payload = JSON.stringify(cfg)
+    // Normalize for length/empties only; allow arbitrary characters the admin entered
+    const safe = (() => {
+      if (!cfg) return cfg
+      const count = Math.max(1, Math.min(8, cfg.courtCount || 1))
+      const names = Array.from({ length: count }, (_, i) => {
+        const raw = (cfg.courtNames?.[i] ?? '').toString().trim()
+        const fallback = String.fromCharCode(65 + i)
+        return raw || fallback
+      })
+      return { ...cfg, courtCount: count, courtNames: names }
+    })()
+    const payload = JSON.stringify(safe)
     const etag = 'W/"' + crypto.createHash('sha1').update(payload).digest('hex') + '"'
     const inm = req.headers.get('if-none-match')
     if (inm && inm === etag) {
       const res304 = new NextResponse(null, { status: 304 })
       res304.headers.set('ETag', etag)
-      res304.headers.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600')
+      // Avoid any stale reuse by CDN/browser
+      res304.headers.set('Cache-Control', 'no-store')
       return res304
     }
     const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
     res.headers.set('ETag', etag)
-    res.headers.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600')
+    // Avoid any stale reuse by CDN/browser
+    res.headers.set('Cache-Control', 'no-store')
     return res
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Failed to fetch day config' }, { status: 400 })
@@ -67,10 +80,16 @@ export async function PUT(req: Request) {
     if (slot < 5 || slot > 240) return NextResponse.json({ error: 'slotMinutes must be 5..240' }, { status: 400 })
     if ((eMin - sMin) % slot !== 0) return NextResponse.json({ error: 'Range must be divisible by slotMinutes' }, { status: 400 })
 
+    const normalizedNames: string[] = Array.from({ length: courtCount }, (_, i) => {
+      const raw = (courtNames[i] ?? '').toString().trim()
+      const fallback = String.fromCharCode(65 + i) // A..H
+      return raw || fallback
+    })
+
     const data = {
       date: toUtcDateOnly(date),
       courtCount,
-      courtNames: courtNames.map((s: string, i: number) => (s && s.trim()) || `Court${i + 1}`),
+      courtNames: normalizedNames,
       startMin: sMin,
       endMin: eMin,
       slotMinutes: slot,

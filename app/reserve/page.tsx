@@ -16,7 +16,7 @@ export default function ReservePage() {
   const [partySize, setPartySize] = useState(1)
   const [playerNames, setPlayerNames] = useState<string[]>([''])
   const [courtCount, setCourtCount] = useState<number>(DEFAULT_COURT_COUNT)
-  const [courtNames, setCourtNames] = useState<string[]>(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => `Court${i + 1}`))
+  const [courtNames, setCourtNames] = useState<string[]>(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => String.fromCharCode(65 + i)))
   const [startMin, setStartMin] = useState<number>(DEFAULT_START_MIN)
   const [endMin, setEndMin] = useState<number>(DEFAULT_END_MIN)
   const [slotMinutes, setSlotMinutes] = useState<number>(DEFAULT_SLOT_MINUTES)
@@ -28,8 +28,9 @@ export default function ReservePage() {
   // Single-day mode: fetch active day config once
   const { data: dayCfg } = useQuery({
     queryKey: ['day'],
-    queryFn: async () => (await axios.get('/api/day')).data,
-    staleTime: 5 * 60 * 1000,
+    queryFn: async () => (await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })).data,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   })
   useEffect(() => {
     if (!dayCfg) return
@@ -39,7 +40,11 @@ export default function ReservePage() {
       const cnt = Math.min(Math.max(dayCfg.courtCount ?? DEFAULT_COURT_COUNT, 1), MAX_COURTS)
       setCourtCount(cnt)
       const names = Array.isArray(dayCfg.courtNames) ? dayCfg.courtNames.slice(0, cnt) : []
-      setCourtNames(names.length === cnt ? names : Array.from({ length: cnt }, (_, i) => names[i] || `Court${i + 1}`))
+      const finalNames = Array.from({ length: cnt }, (_, i) => {
+        const raw = (names[i] ?? '').toString().trim()
+        return raw || String.fromCharCode(65 + i)
+      })
+      setCourtNames(finalNames)
       setStartMin(typeof dayCfg.startMin === 'number' ? dayCfg.startMin : DEFAULT_START_MIN)
       setEndMin(typeof dayCfg.endMin === 'number' ? dayCfg.endMin : DEFAULT_END_MIN)
       setSlotMinutes(typeof dayCfg.slotMinutes === 'number' ? dayCfg.slotMinutes : DEFAULT_SLOT_MINUTES)
@@ -54,6 +59,18 @@ export default function ReservePage() {
   // removed: localStorage editors (now admin-only)
 
   const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
+
+  // Pretty colors for court header badges (max 8)
+  const courtColors = [
+    'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+    'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+    'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+    'bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200',
+    'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200',
+    'bg-pink-50 text-pink-700 ring-1 ring-pink-200',
+    'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+    'bg-lime-50 text-lime-700 ring-1 ring-lime-200',
+  ]
 
   const etagRef = useRef<string | null>(null)
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
@@ -241,28 +258,24 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="relative h-full">
       <button
         type="button"
-        className={`relative h-full w-full p-1 text-left text-xs ${capacityBg} ${
-          isSelected ? 'ring-2 ring-blue-300' : ''
-        } ${tempStyles}`}
+        className={`block h-full w-full text-left p-2 rounded-md ${capacityBg} ${tempStyles} ${isFull || !isAvailable ? 'cursor-not-allowed text-gray-400' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
         onClick={(isFull || !isAvailable) ? undefined : onClick}
         aria-busy={isTemp}
         aria-disabled={isFull || !isAvailable}
       >
         {isTemp && (
-          <span className="absolute -top-2 -right-1 bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap">
-            送信中...
+          <span className="absolute -top-1.5 -right-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow">
+            送信中…
           </span>
         )}
         {names.map((name: string, i: number) => (
           <div key={i} className="truncate">{name}</div>
         ))}
-        <span className="absolute bottom-0.5 right-1 text-[10px] text-gray-400">{used}/4</span>
+        <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[10px] text-gray-600 shadow-sm">{used}/4</span>
       </button>
     </div>
   )
 }
-
-  // Names for a slot and court
   const namesForSlot = (start: number, end: number, courtId: number) => {
     const list = currentWithTemps()
     return list
@@ -277,10 +290,21 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
   if (!mounted) return null
   return (
-    <div className="p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="rounded border px-2 py-1 text-sm bg-white">{date || '-'}</div>
-        <div className="text-sm text-gray-500">コート数: {courtCount}</div>
+    <div className="mx-auto max-w-5xl p-4 space-y-3">
+      {/* Important notice */}
+      <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
+        <p className="mb-1">予約はお一人様1枠までとなります。</p>
+        <p className="mb-1">複数枠のご予約は禁止です。2枠以上の予約が確認された場合は、管理側で削除いたします。</p>
+        <p className="mb-1">大会に参加する選手の方は <span className="font-bold">フルネーム</span> を入力してください。</p>
+        <p className="mb-1">選手以外（＝練習相手）の方は <span className="font-bold">「コーチ」</span> と入力をお願いします。</p>
+        <p className="mb-1">予約をキャンセルする場合は、必ず下記までお電話ください。</p>
+        <p className="mt-2 font-bold">TEL：050-7118-5600</p>
+      </div>
+
+      <div className="mb-1 flex items-center gap-2 flex-nowrap rounded-lg border bg-white/80 px-2 py-1 backdrop-blur">
+        <div className="rounded border px-2 py-1 text-sm bg-white whitespace-nowrap shadow-sm">{date || '-'}</div>
+        <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">コート数: {courtCount}</div>
         <button
           type="button"
           className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
@@ -292,25 +316,27 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           }}
           aria-busy={isResFetching}
         >{isResFetching ? '更新中…' : '更新'}</button>
-        <div className="text-xs text-gray-400">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
+        <div className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
       </div>
 
-      <div className="overflow-auto rounded border">
-        <div className="min-w-[360px] sm:min-w-[680px]">
+      <div className="overflow-auto rounded-xl border bg-white shadow-md">
+        <div className="min-w-[360px] sm:min-w-[720px]">
           <div
             className="grid [grid-template-columns:64px_repeat(var(--cols),90px)] sm:[grid-template-columns:80px_repeat(var(--cols),minmax(0,1fr))]"
             style={{ ['--cols' as any]: courtCount }}
           >
-            <div className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600">時間</div>
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-xs font-bold text-gray-600">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
-              <div key={`h-${i}`} className="sticky top-0 z-10 bg-white p-2 text-xs font-bold text-gray-600 text-center">
-                {courtNames[i] ?? `Court${i + 1}`}
+              <div key={`h-${i}`} className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-center">
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${courtColors[i % courtColors.length]}`}>
+                  {courtNames[i] ?? String.fromCharCode(65 + i)}
+                </span>
               </div>
             ))}
 
             {slots.map(({ start: s, end: e }, rowIdx) => (
               <Fragment key={`row-${rowIdx}`}>
-                <div className="flex items-center justify-center border-t p-2 text-xs text-gray-600">
+                <div className="flex items-center justify-center border-t p-2 text-xs text-gray-600 bg-white">
                   {fmt(s)} - {fmt(e)}
                 </div>
                 {Array.from({ length: courtCount }, (_, ci) => {
@@ -396,7 +422,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 disabled={createMutation.isPending}
                 onClick={async () => {
                   try {
-                    if (playerNames.some((n) => !n || !n.trim())) {
+                    const namesToCheck = playerNames.slice(0, partySize)
+                    if (namesToCheck.length !== partySize || namesToCheck.some((n) => !n || n.trim().length === 0)) {
                       alert('人数分の氏名を入力してください')
                       return
                     }
