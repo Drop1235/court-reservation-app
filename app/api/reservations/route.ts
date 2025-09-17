@@ -221,6 +221,7 @@ export async function POST(req: Request) {
     assertServerReservationValidity(startMin, endMin, partySize)
 
     const dayStart = new Date(date + 'T00:00:00.000Z')
+    const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1)
 
     // Rule: A person can only hold one active (not-yet-finished) reservation at a time.
     // Allow booking again only after the previous reservation end time has passed.
@@ -229,15 +230,27 @@ export async function POST(req: Request) {
       const todayUTCStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
       const nowMinUTC = now.getUTCHours() * 60 + now.getUTCMinutes()
 
-      // Fetch active reservations regardless of stored name formatting
-      const existingActive = await prisma.reservation.findMany({
-        where: {
-          OR: [
-            { date: { gt: todayUTCStart } },
-            { AND: [{ date: todayUTCStart }, { endMin: { gt: nowMinUTC } }] },
-          ],
-        },
-      })
+      const [existingActive, sameDay] = await Promise.all([
+        prisma.reservation.findMany({
+          where: {
+            OR: [
+              { date: { gt: todayUTCStart } },
+              { AND: [{ date: todayUTCStart }, { endMin: { gt: nowMinUTC } }] },
+            ],
+          },
+          select: { playerNames: true } // Only select what we need
+        }),
+        prisma.reservation.findMany({
+          where: { 
+            courtId, 
+            date: { gte: dayStart, lte: dayEnd },
+            OR: [
+              { AND: [{ startMin: { lt: endMin } }, { endMin: { gt: startMin } }] }
+            ]
+          },
+          select: { partySize: true } // Only select what we need
+        })
+      ])
 
       // Compare using normalized names to absorb width/space variations
       const cleanedSet = new Set(cleaned.map((n) => n))
@@ -254,22 +267,15 @@ export async function POST(req: Request) {
           { status: 400 },
         )
       }
+
+      const used = sameDay.reduce((acc: number, r: { partySize: number }) => acc + r.partySize, 0)
+
+      if (used + partySize > 4) {
+        return NextResponse.json({ error: 'Capacity exceeded for this time slot' }, { status: 400 })
+      }
     } catch (checkErr: any) {
       // If the check fails unexpectedly, fail closed with a helpful message instead of proceeding.
       return NextResponse.json({ error: '予約状態の確認に失敗しました。時間をおいて再度お試しください。' }, { status: 400 })
-    }
-
-    // Capacity check: sum of overlapping reservations' partySize for same court must be <= 4
-    const sameDay = await prisma.reservation.findMany({
-      where: { courtId, date: { gte: dayStart, lte: new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1) } },
-    })
-
-    const used = sameDay
-      .filter((r: { startMin: number; endMin: number; partySize: number }) => overlaps(r.startMin, r.endMin, startMin, endMin))
-      .reduce((acc: number, r: { partySize: number }) => acc + r.partySize, 0)
-
-    if (used + partySize > 4) {
-      return NextResponse.json({ error: 'Capacity exceeded for this time slot' }, { status: 400 })
     }
 
     async function createOnce() {
