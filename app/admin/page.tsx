@@ -122,29 +122,29 @@ export default function AdminPage() {
   // removed: legacy per-date court setting editor (now replaced by single-day controls)
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <h1 className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-xl font-extrabold text-transparent">管理</h1>
         <div className="flex items-center gap-2">
           <input
-            className="w-28 rounded border px-2 py-1 text-xs"
+            className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="password"
-            placeholder="管理PIN"
+            placeholder="🔒 管理PIN"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
-          <div className="text-xs text-gray-500">{Array.isArray(visibleData) ? visibleData.length : 0} 件</div>
+          <div className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">{Array.isArray(visibleData) ? visibleData.length : 0} 件</div>
         </div>
       </div>
 
       {/* Single-day controls */}
       <div className="rounded-lg border bg-white shadow-sm">
         <div className="flex items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm font-medium text-gray-700">単日運用：当日設定とリセット</div>
+          <div className="text-sm font-medium text-gray-700">⚙️ 単日運用：当日設定とリセット</div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
               disabled={isResetting}
               onClick={async ()=>{
                 if (!pin) { alert('管理PINを入力してください'); return }
@@ -171,7 +171,7 @@ export default function AdminPage() {
                   else alert(e?.response?.data?.error ?? '削除に失敗しました')
                 } finally { setIsResetting(false) }
               }}
-            >{isResetting ? '削除中…' : '過去の全予約を削除'}</button>
+            >{isResetting ? '削除中…' : '🗑️ 過去の全予約を削除'}</button>
           </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
@@ -225,7 +225,7 @@ export default function AdminPage() {
           <div className="sm:col-span-2">
             <button
               type="button"
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               onClick={async ()=>{
                 if (!pin) { alert('管理PINを入力してください'); return }
                 // 軽いバリデーション
@@ -278,10 +278,10 @@ export default function AdminPage() {
 
       <div className="rounded-lg border bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm font-medium text-gray-700">予約一覧</div>
+          <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
           <div className="flex items-center gap-2">
-            <input className="w-56 rounded border px-3 py-1 text-sm" type="search" placeholder="予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
-            <button type="button" className="rounded border px-2 py-1 text-sm hover:bg-gray-50" onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}>更新</button>
+            <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
+            <button type="button" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500" onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}>更新</button>
           </div>
         </div>
         {(!visibleData || visibleData.length === 0) ? (
@@ -334,11 +334,11 @@ export default function AdminPage() {
                     <td className="px-3 py-2 text-right align-top">
                       <button
                         type="button"
-                        className="rounded bg-red-600 px-3 py-1.5 text-white shadow hover:bg-red-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                         disabled={del.isPending}
                         onClick={() => setConfirmTarget(r)}
                       >
-                        {del.isPending ? '削除中…' : '削除'}
+                        {del.isPending ? '削除中…' : '🗑️ 削除'}
                       </button>
                     </td>
                   </tr>
