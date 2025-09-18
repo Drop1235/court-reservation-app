@@ -148,47 +148,30 @@ export default function AdminPage() {
               disabled={isResetting}
               onClick={async ()=>{
                 if (!pin) { alert('管理PINを入力してください'); return }
-                if (!confirm('当日の予約をすべて削除します。よろしいですか？')) return
+                if (!confirm('過去（当日を含む）の予約をすべて削除します。よろしいですか？')) return
                 setIsResetting(true)
-                // First, compute a best-effort todayKey synchronously and hide immediately
-                const guessKey = (()=>{ try { return new Date(lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return dayDate } })()
-                setHiddenDayKey(guessKey)
-                // In parallel, get the exact day from server to guarantee match with API
-                const dayCfg = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }).then(r=>r.data).catch(()=>null)
-                const todayKey = (()=>{ try { return new Date(dayCfg?.date ?? lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return guessKey } })()
-                if (todayKey !== guessKey) setHiddenDayKey(todayKey)
                 try {
-                  // Force immediate hide in UI regardless of react-query timings
-                  const prev = qc.getQueryData(['all-res']) as any[] | undefined
-                  const idsToHide: string[] = (Array.isArray(prev) ? prev : [])
-                    .filter((r: any) => dateKeyUTC(r.date) === todayKey)
-                    .map((r: any) => r.id)
-                  for (const id of idsToHide) deletedRef.current.add(id)
-                  // Immediately filter by UTC date key so UI updates at once even if timezone differs
-                  qc.setQueryData(['all-res'], (list: any) => Array.isArray(list) ? list.filter((r: any) => dateKeyUTC(r.date) !== todayKey) : list)
+                  // まずサーバから当日設定を取得して"今日"の基準日を合わせる
+                  const dayCfg = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }).then(r=>r.data).catch(()=>null)
+                  const baseDateIso = (()=>{ try { return new Date(dayCfg?.date ?? lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return dayDate } })()
+                  // 明日(UTC)の00:00をcutoffにすることで、当日分を含めて削除（< cutoff）
+                  const cutoffUtcStartOfTomorrow = new Date(baseDateIso + 'T00:00:00.000Z')
+                  cutoffUtcStartOfTomorrow.setUTCDate(cutoffUtcStartOfTomorrow.getUTCDate() + 1)
 
-                  // Server-side reset
-                  const res = await axios.post('/api/day/reset', {}, { headers: { 'x-admin-pin': pin } })
-                  // Strong sync: fetch fresh list and keep hidden ids filtered
+                  const res = await axios.post('/api/admin/bulk-delete-past', { before: cutoffUtcStartOfTomorrow.toISOString() }, { headers: { 'x-admin-pin': pin } })
+
+                  // リストを最新化
                   try {
-                    const fresh = await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-                    const filtered = (Array.isArray(fresh.data) ? fresh.data : []).filter((r: any) => dateKeyUTC(r.date) !== todayKey)
-                    qc.setQueryData(['all-res'], filtered)
+                    await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
                   } catch {}
                   await qc.refetchQueries({ queryKey: ['all-res'] })
-                  // Clear hiddenDayKey after successful sync
-                  setHiddenDayKey(null)
                   alert(`削除件数: ${res.data?.deleted ?? 0}`)
                 } catch (e: any) {
-                  // Rollback optimistic hide on failure
-                  deletedRef.current.clear()
-                  setHiddenDayKey(null)
-                  qc.invalidateQueries({ queryKey: ['all-res'] })
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
-                  else alert(e?.response?.data?.error ?? 'リセットに失敗しました')
+                  else alert(e?.response?.data?.error ?? '削除に失敗しました')
                 } finally { setIsResetting(false) }
               }}
-            >{isResetting ? '削除中…' : '当日の全予約を削除'}</button>
+            >{isResetting ? '削除中…' : '過去の全予約を削除'}</button>
           </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
