@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     // Normalize for length/empties only; allow arbitrary characters the admin entered
     const safe = (() => {
       if (!cfg) return cfg
-      const count = Math.max(1, Math.min(8, cfg.courtCount || 1))
+      const count = Math.max(1, Math.min(21, cfg.courtCount || 1))
       const names = Array.from({ length: count }, (_, i) => {
         const raw = (cfg.courtNames?.[i] ?? '').toString().trim()
         const fallback = String.fromCharCode(65 + i)
@@ -64,8 +64,8 @@ export async function PUT(req: Request) {
     if (!date || !courtCount || !Array.isArray(courtNames)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
-    if (courtCount < 1 || courtCount > 8) {
-      return NextResponse.json({ error: 'courtCount must be 1..8' }, { status: 400 })
+    if (courtCount < 1 || courtCount > 21) {
+      return NextResponse.json({ error: 'courtCount must be 1..21' }, { status: 400 })
     }
     if (courtNames.length !== courtCount) {
       return NextResponse.json({ error: 'courtNames length must equal courtCount' }, { status: 400 })
@@ -82,7 +82,7 @@ export async function PUT(req: Request) {
 
     const normalizedNames: string[] = Array.from({ length: courtCount }, (_, i) => {
       const raw = (courtNames[i] ?? '').toString().trim()
-      const fallback = String.fromCharCode(65 + i) // A..H
+      const fallback = String.fromCharCode(65 + i) // A..U
       return raw || fallback
     })
 

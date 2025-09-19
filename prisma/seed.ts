@@ -1,8 +1,8 @@
 import { prisma } from '../src/lib/prisma'
 
 async function main() {
-  // Courts 1..8
-  for (let i = 1; i <= 8; i++) {
+  // Courts 1..21
+  for (let i = 1; i <= 21; i++) {
     await prisma.court.upsert({ where: { name: `Court${i}` }, create: { name: `Court${i}` }, update: {} })
   }
 

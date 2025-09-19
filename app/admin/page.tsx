@@ -58,8 +58,8 @@ export default function AdminPage() {
         if (!d) return
         const loaded = {
           date: format(new Date(d.date), 'yyyy-MM-dd'),
-          courtCount: Math.max(1, Math.min(8, d.courtCount || 4)),
-          courtNames: Array.from({ length: Math.max(1, Math.min(8, d.courtCount || 4)) }, (_, i) => (d.courtNames?.[i]) || `Court${i + 1}`),
+          courtCount: Math.max(1, Math.min(21, d.courtCount || 4)),
+          courtNames: Array.from({ length: Math.max(1, Math.min(21, d.courtCount || 4)) }, (_, i) => (d.courtNames?.[i]) || `Court${i + 1}`),
           startMin: d.startMin ?? 9 * 60,
           endMin: d.endMin ?? 21 * 60,
           slotMinutes: d.slotMinutes ?? 30,
@@ -180,13 +180,13 @@ export default function AdminPage() {
             <input className="w-48 rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <label className="block text-xs text-gray-600">コート数（1..8）</label>
+            <label className="block text-xs text-gray-600">コート数（1..21）</label>
             <input
               className="w-28 rounded border px-2 py-1 text-sm"
               type="number"
               inputMode="numeric"
               min={1}
-              max={8}
+              max={21}
               value={dayCourtCountInput}
               onChange={(e)=>{
                 // allow temporary empty/partial values while typing
@@ -194,7 +194,7 @@ export default function AdminPage() {
               }}
               onBlur={(e)=>{
                 const n = Number(e.target.value)
-                const v = Number.isFinite(n) ? Math.max(1, Math.min(8, n)) : 1
+                const v = Number.isFinite(n) ? Math.max(1, Math.min(21, n)) : 1
                 setDayCourtCount(v)
                 setDayCourtCountInput(String(v))
                 setDayCourtNames(prev=>{
@@ -237,7 +237,7 @@ export default function AdminPage() {
                 try {
                   // Finalize court count using the current input value (handles case when blur hasn't fired)
                   const nInput = Number(dayCourtCountInput)
-                  const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(8, nInput)) : dayCourtCount
+                  const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(21, nInput)) : dayCourtCount
                   // Sync local states to the finalized value
                   if (finalizedCount !== dayCourtCount) setDayCourtCount(finalizedCount)
                   if (String(finalizedCount) !== dayCourtCountInput) setDayCourtCountInput(String(finalizedCount))

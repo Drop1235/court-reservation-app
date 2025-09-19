@@ -6,7 +6,7 @@ import axios from 'axios'
 import { format } from 'date-fns'
 
 const DEFAULT_COURT_COUNT = 4
-const MAX_COURTS = 8
+const MAX_COURTS = 21
 
 export default function ReservePage() {
   const qc = useQueryClient()
@@ -74,7 +74,7 @@ export default function ReservePage() {
 
   const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
 
-  // Pretty colors for court header badges (max 8)
+  // Pretty colors for court header badges (cycles if courts > color count)
   const courtColors = [
     'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
