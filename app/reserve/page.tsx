@@ -13,7 +13,7 @@ export default function ReservePage() {
   const [date, setDate] = useState<string>('-')
   const [lastRefAt, setLastRefAt] = useState<Date | null>(null)
   const [selectedCourt, setSelectedCourt] = useState<number>(1)
-  const [partySize, setPartySize] = useState(1)
+  const [partySize, setPartySize] = useState(2)
   const [playerNames, setPlayerNames] = useState<string[]>([''])
   const [courtCount, setCourtCount] = useState<number>(DEFAULT_COURT_COUNT)
   const [courtNames, setCourtNames] = useState<string[]>(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => String.fromCharCode(65 + i)))
@@ -315,23 +315,20 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="mx-auto max-w-5xl p-4 space-y-3">
       {/* Important notice */}
       <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
-          <p className="font-bold">※システムに不具合が生じた場合は、大会本部で予約を受け付けますのでお越しください。</p>
-        </div>
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
-          <li>予約開始は、練習コート開放時間の30分前からとなります。</li>
-          <li>予約はお一人様1枠までとなります。（練習終了後は再度予約可能です）</li>
+          <li>予約開始は、<span className="font-bold">練習コート開放時間の30分前</span>からとなります。</li>
+          <li>予約は<span className="font-bold">お一人様1枠まで</span>となります。（練習終了後は再度予約可能です）</li>
           <li>
-            以下のいずれかに当てはまる場合は、管理側で削除いたします。
+            以下のいずれかに当てはまる場合は、<span className="font-bold">管理側で削除</span>いたします。
             <ul className="ml-5 list-disc">
               <li>2枠以上の予約が確認された場合</li>
-              <li>予約開始時刻（＝練習コート開放30分前）より前に行われた場合</li>
+              <li><span className="font-bold">予約開始時刻前</span>の予約が確認された場合</li>
             </ul>
           </li>
-          <li>大会に参加する選手の方はフルネームを入力してください。</li>
-          <li>選手以外（＝練習相手）の方は「コーチ」と入力をお願いします。</li>
-          <li>予約をキャンセルする場合は、必ず下記までお電話ください。</li>
+          <li>大会に参加する選手の方は<span className="font-bold">フルネームを入力</span>してください。</li>
+          <li>選手以外（＝練習相手）の方は<span className="font-bold">「コーチ」と入力</span>をお願いします。</li>
+          <li><span className="font-bold">予約をキャンセルする場合</span>は、必ず下記までお電話ください。</li>
         </ul>
         <p className="mt-2 font-bold">　　TEL：050-7118-5600</p>
       </div>
