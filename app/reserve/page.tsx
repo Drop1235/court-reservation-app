@@ -326,7 +326,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             以下の場合は削除します：
             <ul className="ml-5 list-disc">
               <li>2枠以上の予約</li>
-              <li>開始時刻前の予約</li>
+              <li>予約開始時刻より前の予約</li>
             </ul>
           </li>
           <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
@@ -364,10 +364,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       </div>
 
       <div className="overflow-auto rounded-xl border bg-white shadow-md">
-        <div className="min-w-[360px] sm:min-w-[720px]">
+        <div className="min-w-full overflow-x-auto">
           <div
-            className="grid [grid-template-columns:64px_repeat(var(--cols),90px)] sm:[grid-template-columns:80px_repeat(var(--cols),minmax(0,1fr))]"
-            style={{ ['--cols' as any]: courtCount }}
+            className="grid min-w-max"
+            style={{
+              gridTemplateColumns: `100px repeat(${courtCount}, minmax(120px, 1fr))`,
+            }}
           >
             <div className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-xs font-bold text-gray-600">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
