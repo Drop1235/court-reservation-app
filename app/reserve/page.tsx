@@ -315,6 +315,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="mx-auto max-w-5xl p-4 space-y-3">
       {/* Important notice */}
       <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
+          <p className="font-bold">※システムに不具合が生じた場合は、大会本部で予約を受け付けますのでお越しください。</p>
+        </div>
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
           <li>予約開始は、<span className="font-bold">練習コート開放時間の30分前</span>からとなります。</li>
@@ -322,7 +325,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           <li>
             以下のいずれかに当てはまる場合は、<span className="font-bold">管理側で削除</span>いたします。
             <ul className="ml-5 list-disc">
-              <li>2枠以上の予約が確認された場合</li>
+              <li><span className="font-bold">2枠以上の予約</span>が確認された場合</li>
               <li><span className="font-bold">予約開始時刻前</span>の予約が確認された場合</li>
             </ul>
           </li>
