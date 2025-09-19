@@ -334,12 +334,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         </ul>
         <div className="mt-3 flex items-center justify-center">
           <a
-            href="https://wa.me/819026566470"
+            href="https://wa.me/message/QNM5DYVOU27GD1"
             target="_blank"
             rel="noopener noreferrer"
             className="rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline"
           >
-            https://wa.me/819026566470
+            https://wa.me/message/QNM5DYVOU27GD1
           </a>
         </div>
       </div>
