@@ -320,7 +320,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         </div>
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
-          <li>予約開始は練習コート開放の30分前からです。</li>
+          <li>予約開始は練習コート開放の１時間前からです。</li>
           <li>お一人様1枠まで。（練習終了後は再度予約OK）</li>
           <li>
             以下の場合は削除します：
@@ -330,14 +330,17 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </ul>
           </li>
           <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-          <li>キャンセル・変更・質問は、こちらのQRコードよりWhatsAppチャットにてご連絡ください。</li>
+          <li>キャンセル・変更・質問は、こちらのURLよりWhatsAppチャットにてご連絡ください。</li>
         </ul>
         <div className="mt-3 flex items-center justify-center">
-          <img
-            src="/whatsapp-qr.png"
-            alt="WhatsApp QR"
-            className="h-28 w-28 rounded-md border border-gray-300 bg-white p-1 shadow-sm"
-          />
+          <a
+            href="https://wa.me/819026566470"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline"
+          >
+            https://wa.me/819026566470
+          </a>
         </div>
       </div>
 
