@@ -218,6 +218,14 @@ export async function POST(req: Request) {
     if (cleaned.length !== partySize) {
       return NextResponse.json({ error: '人数分の氏名を入力してください' }, { status: 400 })
     }
+    // Rule: コーチは選手1名に対して1名まで
+    {
+      const coachCount = cleaned.filter((n) => n === 'コーチ').length
+      const playerCount = cleaned.length - coachCount
+      if (coachCount > playerCount) {
+        return NextResponse.json({ error: 'コーチは選手1名につき1名までです。氏名の入力を見直してください。' }, { status: 400 })
+      }
+    }
     assertServerReservationValidity(startMin, endMin, partySize)
 
     const dayStart = new Date(date + 'T00:00:00.000Z')

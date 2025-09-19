@@ -316,24 +316,29 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       {/* Important notice */}
       <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
-          <p className="font-bold">※システムに不具合が生じた場合は、大会本部で予約を受け付けますのでお越しください。</p>
+          <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
         </div>
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
-          <li>予約開始は、<span className="font-bold">練習コート開放時間の30分前</span>からとなります。</li>
-          <li>予約は<span className="font-bold">お一人様1枠まで</span>となります。（練習終了後は再度予約可能です）</li>
+          <li>予約開始は練習コート開放の30分前からです。</li>
+          <li>お一人様1枠まで。（練習終了後は再度予約OK）</li>
           <li>
-            以下のいずれかに当てはまる場合は、<span className="font-bold">管理側で削除</span>いたします。
+            以下の場合は削除します：
             <ul className="ml-5 list-disc">
-              <li><span className="font-bold">2枠以上の予約</span>が確認された場合</li>
-              <li><span className="font-bold">予約開始時刻前</span>の予約が確認された場合</li>
+              <li>2枠以上の予約</li>
+              <li>開始時刻前の予約</li>
             </ul>
           </li>
-          <li>大会に参加する選手の方は<span className="font-bold">フルネームを入力</span>してください。</li>
-          <li>選手以外（＝練習相手）の方は<span className="font-bold">「コーチ」と入力</span>をお願いします。</li>
-          <li><span className="font-bold">予約をキャンセルする場合</span>は、必ず下記までお電話ください。</li>
+          <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
+          <li>キャンセル・変更・質問は、こちらのQRコードよりWhatsAppチャットにてご連絡ください。</li>
         </ul>
-        <p className="mt-2 font-bold">　　TEL：050-7118-5600</p>
+        <div className="mt-3 flex items-center justify-center">
+          <img
+            src="/whatsapp-qr.png"
+            alt="WhatsApp QR"
+            className="h-28 w-28 rounded-md border border-gray-300 bg-white p-1 shadow-sm"
+          />
+        </div>
       </div>
 
       <div className="mb-1 flex items-center gap-2 flex-nowrap rounded-lg border bg-white/80 px-2 py-1 backdrop-blur">
@@ -462,6 +467,15 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     if (namesToCheck.length !== partySize || namesToCheck.some((n) => !n || n.trim().length === 0)) {
                       alert('人数分の氏名を入力してください')
                       return
+                    }
+                    // Front-end rule: コーチは選手1名に対して1名まで
+                    {
+                      const coachCount = namesToCheck.filter((n) => n.trim() === 'コーチ').length
+                      const playerCount = namesToCheck.length - coachCount
+                      if (coachCount > playerCount) {
+                        alert('コーチは選手1名につき1名までです。氏名の入力を見直してください。')
+                        return
+                      }
                     }
                     const idemKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
                     await createMutation.mutateAsync({
