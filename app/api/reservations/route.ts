@@ -239,13 +239,9 @@ export async function POST(req: Request) {
     })
     const dbCourtId = ensuredCourt.id
 
-    // Rule: 同一人物が同じ日付に複数枠を保持することを禁止。
-    // ただし「当日」で、既存予約がすでに終了している場合は再予約を許可。
+    // Rule: 同一人物が同じ日付に「時間が重なる」複数枠を保持することを禁止。
+    // （同日の前後で時間が重ならなければ予約可＝終了後は再予約可）
     try {
-      const now = new Date()
-      const todayUTCStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-      const nowMinUTC = now.getUTCHours() * 60 + now.getUTCMinutes()
-
       const dayStartStart = new Date(dayStart)
       const dayStartEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1)
 
@@ -255,13 +251,13 @@ export async function POST(req: Request) {
 
       // Compare using normalized names; ignore 'コーチ'
       const cleanedSet = new Set(cleaned.filter((n) => n !== 'コーチ'))
-      const isToday = dayStartStart.getTime() === todayUTCStart.getTime()
       const conflict = existingSameDay.some((r) => {
         const names = (r as any).playerNames as string[] | undefined
         const norm = normalizeNames(Array.isArray(names) ? names : [])
-        // For today: only reservations that haven't ended yet block new booking
-        if (isToday && r.endMin <= nowMinUTC) return false
-        return norm.some((n) => n !== 'コーチ' && cleanedSet.has(n))
+        // 同一人物（コーチ以外）が含まれており、かつ時間帯が重なる場合にのみブロック
+        const samePerson = norm.some((n) => n !== 'コーチ' && cleanedSet.has(n))
+        if (!samePerson) return false
+        return overlaps(r.startMin, r.endMin, startMin, endMin)
       })
 
       if (conflict) {
