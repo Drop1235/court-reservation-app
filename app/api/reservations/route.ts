@@ -244,16 +244,15 @@ export async function POST(req: Request) {
       let conflict = false
       const isToday = dayStartStart.getTime() === todayUTCStart.getTime()
       if (isToday) {
-        // 今日: 現在時刻ではなく、新規枠の開始時刻と比較して判断する（タイムゾーン非依存）
-        // 同一人物で、同じ日に endMin > startMin（＝新規枠の開始までに終わっていない予約）があればブロック
-        conflict = relevant.some((r) => r.endMin > startMin)
+        const hasFutureExisting = relevant.some((r) => r.endMin > nowMinUTC)
+        const isNewFuture = startMin >= nowMinUTC
+        if (hasFutureExisting && isNewFuture) conflict = true
       } else {
         // 今日以外: ブロック制約は不要（毎日手動リセット運用）。
-        // この分岐では何もしない（下の重なりチェックのみ適用）。
         conflict = false
       }
 
-      // 加えて、時間帯が重なるケースは日付に関わらずブロック
+      // いつでも、時間帯が重なる場合はブロック
       if (!conflict) {
         conflict = relevant.some((r) => overlaps(r.startMin, r.endMin, startMin, endMin))
       }
