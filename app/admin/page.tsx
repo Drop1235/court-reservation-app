@@ -175,14 +175,14 @@ export default function AdminPage() {
           </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <label className="block text-xs text-gray-600">日付（YYYY-MM-DD）</label>
-            <input className="w-48 rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
+            <input className="w-full rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <label className="block text-xs text-gray-600">コート数（1..21）</label>
             <input
-              className="w-28 rounded border px-2 py-1 text-sm"
+              className="w-full rounded border px-2 py-1 text-sm"
               type="number"
               inputMode="numeric"
               min={1}

@@ -332,12 +332,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
           <li>キャンセル・変更・質問は、こちらのURLよりWhatsAppチャットにてご連絡ください。</li>
         </ul>
-        <div className="mt-3 flex items-center justify-center">
+        <div className="mt-3 flex justify-center px-2">
           <a
             href="https://wa.me/message/QNM5DYVOU27GD1"
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline"
+            className="block max-w-full break-all rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline text-center"
           >
             https://wa.me/message/QNM5DYVOU27GD1
           </a>
