@@ -249,13 +249,15 @@ export async function POST(req: Request) {
 
       let conflict = false
       const isToday = date === localTodayStr
+      const isFutureDay = date > localTodayStr
       if (isToday) {
         const hasFutureExisting = relevant.some((r) => r.endMin > nowMinLocal)
         const isNewFuture = startMin >= nowMinLocal
         if (hasFutureExisting && isNewFuture) conflict = true
       } else {
-        // 今日以外: ブロック制約は不要（毎日手動リセット運用）。
-        conflict = false
+        // 未来日: 同一人物でその日に既に1枠でもあればブロック（1日1枠）
+        // 過去日は特にブロックしない（重なりのみ下で評価）
+        conflict = isFutureDay ? (relevant.length > 0) : false
       }
 
       // いつでも、時間帯が重なる場合はブロック
