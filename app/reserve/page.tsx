@@ -378,10 +378,10 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           <div
             className="grid min-w-max"
             style={{
-              gridTemplateColumns: `100px repeat(${courtCount}, minmax(120px, 1fr))`,
+              gridTemplateColumns: `64px repeat(${courtCount}, minmax(120px, 1fr))`,
             }}
           >
-            <div className="sticky top-0 left-0 z-20 bg-white/95 backdrop-blur p-2 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
+            <div className="sticky top-0 left-0 z-20 bg-white/95 backdrop-blur p-1.5 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
               <div key={`h-${i}`} className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-center">
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${courtColors[i % courtColors.length]}`}>
@@ -392,8 +392,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
             {slots.map(({ start: s, end: e }, rowIdx) => (
               <Fragment key={`row-${rowIdx}`}>
-                <div className="sticky left-0 z-10 flex items-center justify-center border-t p-2 text-xs text-gray-600 bg-white shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">
-                  {fmt(s)} - {fmt(e)}
+                <div className="sticky left-0 z-10 flex flex-col items-center justify-center border-t p-1 text-[11px] leading-tight text-gray-600 bg-white shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">
+                  <div className="whitespace-nowrap">{fmt(s).replace(':','：')}～</div>
+                  <div className="whitespace-nowrap">{fmt(e).replace(':','：')}</div>
                 </div>
                 {Array.from({ length: courtCount }, (_, ci) => {
                   const courtId = ci + 1
