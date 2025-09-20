@@ -287,29 +287,34 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Reservations list */}
       <div className="rounded-lg border bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+          <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
+          <div className="flex items-center gap-2">
+            <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
+            <button
+              type="button"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={async () => {
+                setIsListLoading(true)
+                await qc.invalidateQueries({ queryKey: ['all-res'] })
+                await qc.refetchQueries({ queryKey: ['all-res'] })
+                setLastListRefAt(new Date())
+                setIsListLoading(false)
+              }}
+            >更新</button>
+            {isListLoading && (
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent text-gray-500" />
+            )}
+            <div className="text-xs text-gray-500 whitespace-nowrap">最終更新: {lastListRefAt ? `${String(lastListRefAt.getHours()).padStart(2,'0')}:${String(lastListRefAt.getMinutes()).padStart(2,'0')}:${String(lastListRefAt.getSeconds()).padStart(2,'0')}` : '-'}</div>
+          </div>
         </div>
-      </div>
-    </div>
-
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-        <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
-        <div className="flex items-center gap-2">
-          <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
-          <button
-          type="button"
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          onClick={async () => {
-            setIsListLoading(true)
-            await qc.invalidateQueries({ queryKey: ['all-res'] })
-            await qc.refetchQueries({ queryKey: ['all-res'] })
-            setLastListRefAt(new Date())
-            setIsListLoading(false)
-          }}
-        >更新</button>
-        {isListLoading && (
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent text-gray-500" />
+        {(!visibleData || visibleData.length === 0) ? (
+          <div className="p-6 text-center text-sm text-gray-500">予約はありません</div>
+        ) : (
+          <div className={`overflow-auto transition-opacity duration-300 ${fadingAll || isListLoading ? 'opacity-40' : 'opacity-100'}`}>
+            <table className="min-w-full text-sm">
               <thead className="sticky top-0 z-10 bg-gray-50/90 backdrop-blur">
                 <tr className="text-left">
                   <th className="px-3 py-2 font-medium text-gray-600">日付</th>
