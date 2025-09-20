@@ -226,8 +226,10 @@ export async function POST(req: Request) {
       const dayStartEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1)
 
       const now = new Date()
-      const todayUTCStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-      const nowMinUTC = now.getUTCHours() * 60 + now.getUTCMinutes()
+      // Local-day comparison aligned with UI's displayed date
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const localTodayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+      const nowMinLocal = now.getHours() * 60 + now.getMinutes()
 
       const existingSameDay = await prisma.reservation.findMany({
         where: { date: { gte: dayStartStart, lte: dayStartEnd } },
@@ -242,10 +244,10 @@ export async function POST(req: Request) {
       })
 
       let conflict = false
-      const isToday = dayStartStart.getTime() === todayUTCStart.getTime()
+      const isToday = date === localTodayStr
       if (isToday) {
-        const hasFutureExisting = relevant.some((r) => r.endMin > nowMinUTC)
-        const isNewFuture = startMin >= nowMinUTC
+        const hasFutureExisting = relevant.some((r) => r.endMin > nowMinLocal)
+        const isNewFuture = startMin >= nowMinLocal
         if (hasFutureExisting && isNewFuture) conflict = true
       } else {
         // 今日以外: ブロック制約は不要（毎日手動リセット運用）。

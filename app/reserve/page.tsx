@@ -330,7 +330,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         </div>
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
-          <li>予約開始は練習コート開放の１時間前からです。</li>
+          <li>予約開始は前日の午後8時からです。</li>
           <li>お一人様1枠まで。（終了後は再予約可）</li>
           <li>
             以下の場合は削除します：
