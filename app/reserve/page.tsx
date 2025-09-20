@@ -331,7 +331,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
         <ul className="mb-1 ml-4 list-disc space-y-1">
           <li>予約開始は練習コート開放の１時間前からです。</li>
-          <li>お一人様1枠まで。（練習終了後は再度予約OK）</li>
+          <li>お一人様1枠まで。（終了後は再予約可）</li>
           <li>
             以下の場合は削除します：
             <ul className="ml-5 list-disc">
@@ -381,9 +381,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               gridTemplateColumns: `64px repeat(${courtCount}, minmax(120px, 1fr))`,
             }}
           >
-            <div className="sticky top-0 left-0 z-20 bg-white/95 backdrop-blur p-1.5 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
+            <div className="sticky top-0 left-0 z-30 bg-white/95 backdrop-blur p-1.5 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
-              <div key={`h-${i}`} className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-center">
+              <div key={`h-${i}`} className="sticky top-0 z-20 bg-white/95 backdrop-blur p-2 text-center border-b border-gray-200 shadow-sm">
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${courtColors[i % courtColors.length]}`}>
                   {courtNames[i] ?? String.fromCharCode(65 + i)}
                 </span>

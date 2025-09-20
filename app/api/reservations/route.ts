@@ -239,31 +239,28 @@ export async function POST(req: Request) {
     })
     const dbCourtId = ensuredCourt.id
 
-    // Rule: A person can only hold one active (not-yet-finished) reservation at a time.
-    // Allow booking again only after the previous reservation end time has passed.
+    // Rule: 同一人物が同じ日付に複数枠を保持することを禁止。
+    // ただし「当日」で、既存予約がすでに終了している場合は再予約を許可。
     try {
       const now = new Date()
       const todayUTCStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
       const nowMinUTC = now.getUTCHours() * 60 + now.getUTCMinutes()
 
-      // Fetch active reservations regardless of stored name formatting
-      const existingActive = await prisma.reservation.findMany({
-        where: {
-          OR: [
-            { date: { gt: todayUTCStart } },
-            { AND: [{ date: todayUTCStart }, { endMin: { gt: nowMinUTC } }] },
-          ],
-        },
+      const dayStartStart = new Date(dayStart)
+      const dayStartEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1)
+
+      const existingSameDay = await prisma.reservation.findMany({
+        where: { date: { gte: dayStartStart, lte: dayStartEnd } },
       })
 
-      // Compare using normalized names to absorb width/space variations
-      // Special rule: the name 'コーチ' is excluded from duplicate checks
+      // Compare using normalized names; ignore 'コーチ'
       const cleanedSet = new Set(cleaned.filter((n) => n !== 'コーチ'))
-      const conflict = existingActive.some((r) => {
-        // Access playerNames with a safe cast to tolerate stale Prisma types
+      const isToday = dayStartStart.getTime() === todayUTCStart.getTime()
+      const conflict = existingSameDay.some((r) => {
         const names = (r as any).playerNames as string[] | undefined
         const norm = normalizeNames(Array.isArray(names) ? names : [])
-        // exclude 'コーチ' from comparison on existing as well
+        // For today: only reservations that haven't ended yet block new booking
+        if (isToday && r.endMin <= nowMinUTC) return false
         return norm.some((n) => n !== 'コーチ' && cleanedSet.has(n))
       })
 
