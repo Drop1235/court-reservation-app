@@ -46,6 +46,16 @@ export default function ReservePage() {
     return () => window.removeEventListener('storage', onStorage)
   }, [qc])
 
+  // Safely formatted date label for UI (avoid crashing on invalid date strings)
+  const dateLabel = useMemo(() => {
+    try {
+      if (!date || date === '-' || isNaN(Date.parse(date))) return date || '-'
+      return format(new Date(date), 'yyyy-MM-dd')
+    } catch {
+      return date || '-'
+    }
+  }, [date])
+
   useEffect(() => {
     if (!dayCfg) return
     try {
@@ -344,12 +354,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         </div>
       </div>
 
-      <div className="mb-1 flex items-center gap-2 flex-nowrap rounded-lg border bg-white/80 px-2 py-1 backdrop-blur">
-        <div className="rounded border px-2 py-1 text-sm bg-white whitespace-nowrap shadow-sm">{date || '-'}</div>
-        <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">コート数: {courtCount}</div>
+      <div className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-white/80 px-2 py-1 backdrop-blur min-w-0">
+        <div className="rounded border px-2 py-1 text-sm bg-white whitespace-nowrap shadow-sm">{dateLabel}</div>
+        <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap shrink-0">コート数: {courtCount}</div>
         <button
           type="button"
-          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
+          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60 shrink-0"
           disabled={isResFetching}
           onClick={async () => {
             await qc.invalidateQueries({ queryKey: ['day'] })
@@ -360,7 +370,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           }}
           aria-busy={isResFetching}
         >{isResFetching ? '更新中…' : '更新'}</button>
-        <div className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
+        <div className="ml-auto basis-full text-right text-[10px] sm:text-xs text-gray-400 whitespace-nowrap sm:basis-auto">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
       </div>
 
       <div className="overflow-auto rounded-xl border bg-white shadow-md">
@@ -398,6 +408,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         start={s}
                         end={e}
                         onClick={() => {
+                          // Guard: avoid opening modal when date is not yet valid
+                          if (!date || date === '-' || isNaN(Date.parse(date))) return
                           if (full) return
                           setSelectedCourt(courtId)
                           setSelectedSlot({ start: s, end: e })

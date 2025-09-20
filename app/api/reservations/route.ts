@@ -230,6 +230,15 @@ export async function POST(req: Request) {
 
     const dayStart = new Date(date + 'T00:00:00.000Z')
 
+    // Ensure the referenced Court exists with a stable id matching the selected index.
+    // This guards against production DBs where courts were not fully seeded (causing FK errors).
+    const ensuredCourt = await prisma.court.upsert({
+      where: { id: courtId },
+      create: { id: courtId, name: `Court${courtId}` },
+      update: {},
+    })
+    const dbCourtId = ensuredCourt.id
+
     // Rule: A person can only hold one active (not-yet-finished) reservation at a time.
     // Allow booking again only after the previous reservation end time has passed.
     try {
@@ -271,7 +280,7 @@ export async function POST(req: Request) {
 
     // Capacity check: sum of overlapping reservations' partySize for same court must be <= 4
     const sameDay = await prisma.reservation.findMany({
-      where: { courtId, date: { gte: dayStart, lte: new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1) } },
+      where: { courtId: dbCourtId, date: { gte: dayStart, lte: new Date(dayStart.getTime() + 24 * 3600 * 1000 - 1) } },
     })
 
     const used = sameDay
@@ -286,7 +295,7 @@ export async function POST(req: Request) {
       return await prisma.reservation.create({
         data: {
           userId,
-          courtId,
+          courtId: dbCourtId,
           date: dayStart,
           startMin,
           endMin,
