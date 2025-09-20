@@ -110,42 +110,21 @@ export async function GET(req: Request) {
       if (courtId) where.courtId = Number(courtId)
       const reservations = await prisma.reservation.findMany({ where })
       const payload = JSON.stringify(reservations)
-      const etag = 'W/"' + crypto.createHash('sha1').update(payload).digest('hex') + '"'
-      const ifNoneMatch = req.headers.get('if-none-match')
-      if (ifNoneMatch && ifNoneMatch === etag) {
-        const res304 = new NextResponse(null, { status: 304 })
-        res304.headers.set('ETag', etag)
-        res304.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
-        res304.headers.set('X-ETag-Calc', etag)
-        res304.headers.set('X-Cache-Intent', 'public-30')
-        return res304
-      }
       const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
-      res.headers.set('ETag', etag)
-      res.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
-      res.headers.set('X-ETag-Calc', etag)
-      res.headers.set('X-Cache-Intent', 'public-30')
+      // Strictly disable caching everywhere to avoid ghost re-appearing rows after delete
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+      res.headers.set('Pragma', 'no-cache')
+      res.headers.set('Expires', '0')
       return res
     }
 
     // If no date provided: return all reservations publicly (no auth)
     const reservations = await prisma.reservation.findMany({})
     const payload = JSON.stringify(reservations)
-    const etag = 'W/"' + crypto.createHash('sha1').update(payload).digest('hex') + '"'
-    const ifNoneMatch = req.headers.get('if-none-match')
-    if (ifNoneMatch && ifNoneMatch === etag) {
-      const res304 = new NextResponse(null, { status: 304 })
-      res304.headers.set('ETag', etag)
-      res304.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
-      res304.headers.set('X-ETag-Calc', etag)
-      res304.headers.set('X-Cache-Intent', 'public-30')
-      return res304
-    }
     const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
-    res.headers.set('ETag', etag)
-    res.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=30')
-    res.headers.set('X-ETag-Calc', etag)
-    res.headers.set('X-Cache-Intent', 'public-30')
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    res.headers.set('Pragma', 'no-cache')
+    res.headers.set('Expires', '0')
     return res
   } catch (e: any) {
     captureErrorWithRequest(req, e)
