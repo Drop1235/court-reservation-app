@@ -505,6 +505,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         endMin: selectedSlot.end,
                         partySize,
                         playerNames: playerNames.map((n) => n.trim()),
+                        clientNowMin: (() => { const now = new Date(); return now.getHours()*60 + now.getMinutes() })(),
                       },
                     })
                     setSelectedSlot(null)

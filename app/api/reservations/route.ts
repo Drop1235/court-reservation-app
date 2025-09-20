@@ -182,13 +182,14 @@ export async function POST(req: Request) {
       userId = guest!.id
     }
     const body = await req.json()
-    const { courtId, date, startMin, endMin, partySize, playerNames } = body as {
+    const { courtId, date, startMin, endMin, partySize, playerNames, clientNowMin } = body as {
       courtId: number
       date: string
       startMin: number
       endMin: number
       partySize: number
       playerNames: string[]
+      clientNowMin?: number
     }
 
     if (!courtId || !date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -229,7 +230,10 @@ export async function POST(req: Request) {
       // Local-day comparison aligned with UI's displayed date
       const pad = (n: number) => String(n).padStart(2, '0')
       const localTodayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-      const nowMinLocal = now.getHours() * 60 + now.getMinutes()
+      // Prefer client-provided local minutes to avoid server timezone skew
+      const nowMinLocal = (typeof clientNowMin === 'number' && clientNowMin >= 0 && clientNowMin < 24*60)
+        ? clientNowMin
+        : (now.getHours() * 60 + now.getMinutes())
 
       const existingSameDay = await prisma.reservation.findMany({
         where: { date: { gte: dayStartStart, lte: dayStartEnd } },
