@@ -381,7 +381,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               gridTemplateColumns: `100px repeat(${courtCount}, minmax(120px, 1fr))`,
             }}
           >
-            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-xs font-bold text-gray-600">時間</div>
+            <div className="sticky top-0 left-0 z-20 bg-white/95 backdrop-blur p-2 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
               <div key={`h-${i}`} className="sticky top-0 z-10 bg-white/95 backdrop-blur p-2 text-center">
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${courtColors[i % courtColors.length]}`}>
@@ -392,7 +392,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
             {slots.map(({ start: s, end: e }, rowIdx) => (
               <Fragment key={`row-${rowIdx}`}>
-                <div className="flex items-center justify-center border-t p-2 text-xs text-gray-600 bg-white">
+                <div className="sticky left-0 z-10 flex items-center justify-center border-t p-2 text-xs text-gray-600 bg-white shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">
                   {fmt(s)} - {fmt(e)}
                 </div>
                 {Array.from({ length: courtCount }, (_, ci) => {
