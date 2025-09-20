@@ -31,6 +31,7 @@ export default function AdminPage() {
   })
   const [q, setQ] = useState('')
   const [pin, setPin] = useState('')
+  const [lastListRefAt, setLastListRefAt] = useState<Date | null>(null)
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   // removed: past bulk delete cutoff
   const [settingCount, setSettingCount] = useState<number>(4)
@@ -91,6 +92,8 @@ export default function AdminPage() {
   const [confirmTarget, setConfirmTarget] = useState<any | null>(null)
   const [hiddenDayKey, setHiddenDayKey] = useState<string | null>(null)
   const [isResetting, setIsResetting] = useState<boolean>(false)
+  const [isListLoading, setIsListLoading] = useState<boolean>(false)
+  const [fadingAll, setFadingAll] = useState<boolean>(false)
 
   // Helper for UTC date key
   const dateKeyUTC = (d: any) => {
@@ -150,28 +153,36 @@ export default function AdminPage() {
                 if (!pin) { alert('管理PINを入力してください'); return }
                 if (!confirm('過去（当日を含む）の予約をすべて削除します。よろしいですか？')) return
                 setIsResetting(true)
+                setIsListLoading(true)
+                setFadingAll(true)
                 try {
-                  // まずサーバから当日設定を取得して"今日"の基準日を合わせる
-                  const dayCfg = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }).then(r=>r.data).catch(()=>null)
-                  const baseDateIso = (()=>{ try { return new Date(dayCfg?.date ?? lastLoadedRef.current?.date ?? dayDate).toISOString().slice(0,10) } catch { return dayDate } })()
-                  // 明日(UTC)の00:00をcutoffにすることで、当日分を含めて削除（< cutoff）
-                  const cutoffUtcStartOfTomorrow = new Date(baseDateIso + 'T00:00:00.000Z')
-                  cutoffUtcStartOfTomorrow.setUTCDate(cutoffUtcStartOfTomorrow.getUTCDate() + 1)
-
-                  const res = await axios.post('/api/admin/bulk-delete-past', { before: cutoffUtcStartOfTomorrow.toISOString() }, { headers: { 'x-admin-pin': pin } })
+                  // 全予約を完全削除（ユーザー了承済み）
+                  const res = await axios.post('/api/admin/bulk-delete-past', { all: true }, { headers: { 'x-admin-pin': pin } })
 
                   // リストを最新化
-                  try {
-                    await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-                  } catch {}
+                  try { await axios.get(`/api/reservations?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
                   await qc.refetchQueries({ queryKey: ['all-res'] })
+                  // 追加の再取得（短時間に2回）で整合性をより担保
+                  await new Promise(r => setTimeout(r, 150))
+                  await qc.refetchQueries({ queryKey: ['all-res'] })
+                  setLastListRefAt(new Date())
                   alert(`削除件数: ${res.data?.deleted ?? 0}`)
                 } catch (e: any) {
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '削除に失敗しました')
-                } finally { setIsResetting(false) }
+                } finally {
+                  // フェードアウト表示をしばらく維持してから解除
+                  setTimeout(() => { setFadingAll(false) }, 300)
+                  setIsResetting(false)
+                  setIsListLoading(false)
+                }
               }}
-            >{isResetting ? '削除中…' : '🗑️ 過去の全予約を削除'}</button>
+            >
+              {isResetting && (
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"></span>
+              )}
+              {isResetting ? '削除中…' : '🗑️ 過去の全予約を削除'}
+            </button>
           </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
@@ -277,18 +288,28 @@ export default function AdminPage() {
       </div>
 
       <div className="rounded-lg border bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
-          <div className="flex items-center gap-2">
-            <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
-            <button type="button" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500" onClick={() => qc.invalidateQueries({ queryKey: ['all-res'] })}>更新</button>
-          </div>
         </div>
-        {(!visibleData || visibleData.length === 0) ? (
-          <div className="p-6 text-center text-sm text-gray-500">予約はありません</div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
+      </div>
+    </div>
+
+    <div className="rounded-lg border bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+        <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
+        <div className="flex items-center gap-2">
+          <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
+          <button
+          type="button"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onClick={async () => {
+            setIsListLoading(true)
+            await qc.invalidateQueries({ queryKey: ['all-res'] })
+            await qc.refetchQueries({ queryKey: ['all-res'] })
+            setLastListRefAt(new Date())
+            setIsListLoading(false)
+          }}
+        >更新</button>
+        {isListLoading && (
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent text-gray-500" />
               <thead className="sticky top-0 z-10 bg-gray-50/90 backdrop-blur">
                 <tr className="text-left">
                   <th className="px-3 py-2 font-medium text-gray-600">日付</th>
