@@ -20,10 +20,43 @@ export default function ReservePage() {
   const [startMin, setStartMin] = useState<number>(DEFAULT_START_MIN)
   const [endMin, setEndMin] = useState<number>(DEFAULT_END_MIN)
   const [slotMinutes, setSlotMinutes] = useState<number>(DEFAULT_SLOT_MINUTES)
+  // responsive: adjust grid density for tablet/desktop so more courts fit
+  const [colMinPx, setColMinPx] = useState<number>(120)
+  const [timeColPx, setTimeColPx] = useState<number>(64)
+  const [isMobile, setIsMobile] = useState<boolean>(false)
+  const [colPx, setColPx] = useState<number>(120)
 
   // client-only render guard to avoid hydration mismatch
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
+  // レスポンシブレイアウト調整: 画面幅とコート数に合わせて列幅を動的計算（PCでは全コートが1画面に入るよう最優先）
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const apply = () => {
+      const w = window.innerWidth
+      const h = window.innerHeight || 1
+      const aspect = w / h
+      setIsMobile(w < 640)
+      if (w >= 640) {
+        // 目標: ビューポート幅に全コート + 時間列をぴったり収める
+        // 時間列幅は画面が広いほど小さめ
+        const timeCol = w >= 1600 || aspect > 1.9 ? 44 : w >= 1280 || aspect > 1.6 ? 48 : 52
+        // デスクトップは固定px幅ではなく、全幅を使って1frで自動的に広がるようにする
+        setTimeColPx(timeCol)
+        setColMinPx(40)
+        setColPx(40)
+      } else {
+        // モバイルは広すぎないよう標準値
+        setColMinPx(110)
+        setTimeColPx(60)
+        setColPx(110)
+      }
+    }
+    apply()
+    window.addEventListener('resize', apply)
+    return () => window.removeEventListener('resize', apply)
+  }, [courtCount])
 
   // Single-day mode: fetch active day config once
   const { data: dayCfg } = useQuery({
@@ -290,7 +323,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="relative h-full">
       <button
         type="button"
-        className={`block h-full w-full text-left p-2 rounded-md ${capacityBg} ${tempStyles} ${isFull || !isAvailable ? 'cursor-not-allowed text-gray-400' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+        className={`block h-full w-full text-left p-1 md:p-1 lg:p-1 rounded-md text-[11px] md:text-[10px] ${capacityBg} ${tempStyles} ${isFull || !isAvailable ? 'cursor-not-allowed text-gray-400' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
         onClick={(isFull || !isAvailable) ? undefined : onClick}
         aria-busy={isTemp}
         aria-disabled={isFull || !isAvailable}
@@ -301,9 +334,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           </span>
         )}
         {names.map((name: string, i: number) => (
-          <div key={i} className="truncate">{name}</div>
+          <div key={i} className="truncate leading-tight">{name}</div>
         ))}
-        <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[10px] text-gray-600 shadow-sm">{used}/4</span>
+        <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[9px] md:text-[10px] text-gray-600 shadow-sm">{used}/4</span>
       </button>
     </div>
   )
@@ -321,70 +354,83 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
   }
 
   if (!mounted) return null
+
   return (
-    <div className="mx-auto max-w-5xl p-4 space-y-3">
+    <div className="w-full max-w-none overflow-x-hidden space-y-3">
       {/* Important notice */}
-      <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
-          <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
-        </div>
-        <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
-        <ul className="mb-1 ml-4 list-disc space-y-1">
-          <li>予約開始は前日の午後8時からです。</li>
-          <li>お一人様1枠まで。（終了後は再予約可）</li>
-          <li>
-            以下の場合は削除します：
-            <ul className="ml-5 list-disc">
-              <li>2枠以上の予約</li>
-              <li>予約開始時刻より前の予約</li>
-            </ul>
-          </li>
-          <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-          <li>キャンセル・変更・質問は、こちらのURLよりWhatsAppチャットにてご連絡ください。</li>
-        </ul>
-        <div className="mt-3 flex justify-center px-2">
-          <a
-            href="https://wa.me/message/QNM5DYVOU27GD1"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block max-w-full break-all rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline text-center"
-          >
-            https://wa.me/message/QNM5DYVOU27GD1
-          </a>
+      <div className="mb-1">
+        <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full">
+          <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
+            <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
+              <ul className="mb-1 ml-4 list-disc space-y-1">
+                <li>予約開始は前日の午後8時からです。</li>
+                <li>お一人様1枠まで。（終了後は再予約可）</li>
+                <li>
+                  以下の場合は削除します：
+                  <ul className="ml-5 list-disc">
+                    <li>2枠以上の予約</li>
+                    <li>予約開始時刻より前の予約</li>
+                  </ul>
+                </li>
+                <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
+                <li>キャンセル・変更・質問は、以下の"WhatsAppで連絡する" よりWhatsAppチャットにてご連絡ください。</li>
+              </ul>
+            </div>
+            <div>
+              <a
+                href="https://wa.me/message/QNM5DYVOU27GD1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline"
+              >
+                WhatsAppで連絡する
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-white/80 px-2 py-1 backdrop-blur min-w-0">
-        <div className="rounded border px-2 py-1 text-sm bg-white whitespace-nowrap shadow-sm">{dateLabel}</div>
-        <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap shrink-0">コート数: {courtCount}</div>
-        <button
-          type="button"
-          className="ml-auto rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60 shrink-0"
-          disabled={isResFetching}
-          onClick={async () => {
-            await qc.invalidateQueries({ queryKey: ['day'] })
-            await qc.refetchQueries({ queryKey: ['day'] })
-            await qc.invalidateQueries({ queryKey: ['reservations', date] })
-            await qc.refetchQueries({ queryKey: ['reservations', date] })
-            setLastRefAt(new Date())
-          }}
-          aria-busy={isResFetching}
-        >{isResFetching ? '更新中…' : '更新'}</button>
-        <div className="ml-auto basis-full text-right text-[10px] sm:text-xs text-gray-400 whitespace-nowrap sm:basis-auto">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
+      <div className="mb-1 flex items-center justify-between gap-3 rounded-lg border bg-white/80 px-2 py-1 backdrop-blur w-full">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="rounded border px-2 py-1 text-sm bg-white whitespace-nowrap shadow-sm">{dateLabel}</div>
+          <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap shrink-0">コート数: {courtCount}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">最終更新: {lastRefAt ? format(lastRefAt, 'HH:mm:ss') : '-'}</div>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
+            disabled={isResFetching}
+            onClick={async () => {
+              await qc.invalidateQueries({ queryKey: ['day'] })
+              await qc.refetchQueries({ queryKey: ['day'] })
+              await qc.invalidateQueries({ queryKey: ['reservations', date] })
+              await qc.refetchQueries({ queryKey: ['reservations', date] })
+              setLastRefAt(new Date())
+            }}
+            aria-busy={isResFetching}
+          >{isResFetching ? '更新中…' : '更新'}</button>
+        </div>
       </div>
 
-      <div className="overflow-auto rounded-xl border bg-white shadow-md">
-        <div className="min-w-full overflow-x-auto">
+      <div className="mt-1">
+        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full`}>
           <div
-            className="grid min-w-max"
-            style={{
-              gridTemplateColumns: `64px repeat(${courtCount}, minmax(120px, 1fr))`,
+            className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
+            style={isMobile ? {
+              gridTemplateColumns: `${timeColPx}px repeat(${courtCount}, minmax(${colMinPx}px, 1fr))`,
+            } : {
+              gridTemplateColumns: `${timeColPx}px repeat(${courtCount}, minmax(72px, 1fr))`,
             }}
           >
-            <div className="sticky top-0 left-0 z-30 bg-white/95 backdrop-blur p-1.5 text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
+            <div className="sticky top-0 left-0 z-30 bg-white/95 backdrop-blur p-1 text-[11px] md:text-xs font-bold text-gray-600 shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">時間</div>
             {Array.from({ length: courtCount }, (_, i) => (
-              <div key={`h-${i}`} className="sticky top-0 z-20 bg-white/95 backdrop-blur p-2 text-center border-b border-gray-200 shadow-sm">
-                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${courtColors[i % courtColors.length]}`}>
+              <div key={`h-${i}`} className="sticky top-0 z-20 bg-white/95 backdrop-blur p-1 text-center border-b border-gray-200 shadow-sm">
+                <span className={`inline-block whitespace-nowrap px-2 py-0.5 text-[10px] md:text-xs font-medium rounded-full ${courtColors[i % courtColors.length]}`}>
                   {courtNames[i] ?? String.fromCharCode(65 + i)}
                 </span>
               </div>
@@ -392,7 +438,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
             {slots.map(({ start: s, end: e }, rowIdx) => (
               <Fragment key={`row-${rowIdx}`}>
-                <div className="sticky left-0 z-10 flex flex-col items-center justify-center border-t p-1 text-[11px] leading-tight text-gray-600 bg-white shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">
+                <div className="sticky left-0 z-10 flex flex-col items-center justify-center border-t p-1 text-[10px] md:text-[11px] leading-tight text-gray-600 bg-white shadow after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-gray-200">
                   <div className="whitespace-nowrap">{fmt(s).replace(':','：')}～</div>
                   <div className="whitespace-nowrap">{fmt(e).replace(':','：')}</div>
                 </div>

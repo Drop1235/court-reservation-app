@@ -45,4 +45,10 @@ html, body, :root {
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  margin: 0; /* remove default browser margins */
+}
+
+/* Avoid accidental horizontal scrollbars on wide desktop */
+html {
+  overflow-x: hidden;
 }
