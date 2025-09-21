@@ -1,5 +1,6 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client"
-import { useEffect, useMemo, useState, Fragment, useRef } from 'react'
+import { useEffect, useMemo, useState, Fragment, useRef, useCallback } from 'react'
 import { makeSlots, DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN } from '@/src/lib/time'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
@@ -182,12 +183,12 @@ export default function ReservePage() {
     return base
   }
 
-  const usedCapacity = (start: number, end: number, courtId: number) => {
+  const usedCapacity = useCallback((start: number, end: number, courtId: number) => {
     const list = currentWithTemps()
     return list
       .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, start) < Math.min(r.endMin, end))
       .reduce((acc: number, r: any) => acc + r.partySize, 0)
-  }
+  }, [reservations])
 
   const createMutation = useMutation({
     mutationFn: async (args: { payload: any; idemKey: string }) => (
@@ -277,7 +278,7 @@ export default function ReservePage() {
     const used = usedCapacity(selectedSlot.start, selectedSlot.end, selectedCourt)
     const maxAllowed = Math.max(1, 4 - used)
     setPartySize((p) => Math.min(p, maxAllowed))
-  }, [selectedSlot, selectedCourt, reservations])
+  }, [selectedSlot, selectedCourt, reservations, usedCapacity])
   // ensure playerNames length equals partySize
   useEffect(() => {
     setPlayerNames((prev) => {
@@ -377,7 +378,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                   </ul>
                 </li>
                 <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-                <li>キャンセル・変更・質問は、以下の"WhatsAppで連絡する" よりWhatsAppチャットにてご連絡ください。</li>
+                <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりWhatsAppチャットにてご連絡ください。</li>
               </ul>
             </div>
             <div>
