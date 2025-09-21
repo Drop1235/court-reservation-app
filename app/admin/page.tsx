@@ -332,6 +332,8 @@ export default function AdminPage() {
                     format(new Date(r.date), 'yyyy-MM-dd'),
                     `${fmt(r.startMin)} - ${fmt(r.endMin)}`,
                     `court ${r.courtId}`,
+                    // 予約画面と同じコート名も検索対象に含める
+                    (dayCourtNames[r.courtId - 1] ?? `Court${r.courtId}`),
                     `${r.partySize}`,
                     ...(Array.isArray(r.playerNames) ? r.playerNames : []),
                   ]
@@ -343,7 +345,9 @@ export default function AdminPage() {
                     <td className="px-3 py-2 align-top">{format(new Date(r.date), 'yyyy-MM-dd')}</td>
                     <td className="px-3 py-2 align-top">{fmt(r.startMin)} - {fmt(r.endMin)}</td>
                     <td className="px-3 py-2 align-top">
-                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">Court {r.courtId}</span>
+                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
+                        {dayCourtNames[r.courtId - 1] ?? `Court${r.courtId}`}
+                      </span>
                     </td>
                     <td className="px-3 py-2 align-top">
                       <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">{r.partySize} 名</span>
@@ -382,7 +386,7 @@ export default function AdminPage() {
             <div className="mb-3 space-y-1 text-sm text-gray-700">
               <div>日付：{format(new Date(confirmTarget.date), 'yyyy-MM-dd')}</div>
               <div>時間：{fmt(confirmTarget.startMin)} - {fmt(confirmTarget.endMin)}</div>
-              <div>コート：{confirmTarget.courtId}</div>
+              <div>コート：{dayCourtNames[confirmTarget.courtId - 1] ?? `Court${confirmTarget.courtId}`}（ID: {confirmTarget.courtId}）</div>
               <div>人数：{confirmTarget.partySize}</div>
               <div className="whitespace-pre-line">氏名：{(confirmTarget.playerNames ?? []).join('\n')}</div>
             </div>
