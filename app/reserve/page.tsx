@@ -375,10 +375,10 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                   <ul className="ml-5 list-disc">
                     <li>2枠以上の予約</li>
                     <li>予約開始時刻より前の予約</li>
-                    <li>名前がフルネーム以外の予約</li>
+                    <li>名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
                   </ul>
                 </li>
-                <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
+                <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
                 <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
               </ul>
             </div>
@@ -502,7 +502,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </div>
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium">氏名（人数分・必須）</label>
-              <p className="mb-2 text-sm font-bold text-red-600">※フルネーム以外は、見つけ次第削除します。</p>
+              <p className="mb-1 text-sm font-bold text-red-600">漢字フルネームで入力してください。漢字以外の方は本名をそのまま記入してください。</p>
+              <p className="mb-2 text-sm font-bold text-red-600">漢字フルネーム以外は、見つけ次第削除します。</p>
               <div className="space-y-2">
                 {Array.from({ length: partySize }).map((_, idx) => (
                   <input
@@ -553,7 +554,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         startMin: selectedSlot.start,
                         endMin: selectedSlot.end,
                         partySize,
-                        playerNames: playerNames.map((n) => n.trim()),
+                        // 全角/半角スペース・改行などの空白をすべて削除して送信
+                        playerNames: playerNames.map((n) => n.replace(/\s+/g, '')), 
                         clientNowMin: (() => { const now = new Date(); return now.getHours()*60 + now.getMinutes() })(),
                       },
                     })
