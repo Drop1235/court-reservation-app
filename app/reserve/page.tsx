@@ -378,7 +378,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                   </ul>
                 </li>
                 <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-                <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりWhatsAppチャットにてご連絡ください。</li>
+                <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
               </ul>
             </div>
             <div>
@@ -501,6 +501,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </div>
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium">氏名（人数分・必須）</label>
+              <p className="mb-2 text-sm font-bold text-red-600">注意：フルネーム以外は、見つけ次第削除します。</p>
               <div className="space-y-2">
                 {Array.from({ length: partySize }).map((_, idx) => (
                   <input
