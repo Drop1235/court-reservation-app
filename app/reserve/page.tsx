@@ -375,6 +375,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                   <ul className="ml-5 list-disc">
                     <li>2枠以上の予約</li>
                     <li>予約開始時刻より前の予約</li>
+                    <li>名前がフルネーム以外の予約</li>
                   </ul>
                 </li>
                 <li>選手はフルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
@@ -501,8 +502,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </div>
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium">氏名（人数分・必須）</label>
-              <p className="mb-1 text-sm font-bold text-red-600">※フルネーム以外は、見つけ次第削除します。</p>
-              <p className="mb-2 text-sm font-bold text-red-600">前日20時より前の予約は削除します。</p>
+              <p className="mb-2 text-sm font-bold text-red-600">※フルネーム以外は、見つけ次第削除します。</p>
               <div className="space-y-2">
                 {Array.from({ length: partySize }).map((_, idx) => (
                   <input
