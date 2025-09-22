@@ -372,10 +372,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 <li>お一人様1枠まで。（終了後は再予約可）</li>
                 <li>
                   以下の場合は削除します：
-                  <ul className="ml-5 list-disc">
-                    <li>2枠以上の予約</li>
-                    <li>予約開始時刻より前の予約</li>
-                    <li>名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
+                  <ul className="ml-5 list-none space-y-1">
+                    <li>・2枠以上の予約</li>
+                    <li>・予約開始時刻より前の予約</li>
+                    <li>・名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
+                    <li>・大会に出場していない選手の予約</li>
+                    <li>・偽名での予約</li>
                   </ul>
                 </li>
                 <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
