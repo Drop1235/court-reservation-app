@@ -75,10 +75,16 @@ export default function ReservePage() {
         qc.refetchQueries({ queryKey: ['day'] })
         setLastRefAt(new Date())
       }
+      if (e.key === 'resUpdated') {
+        // Names edited from admin; refresh current date's reservations
+        qc.invalidateQueries({ queryKey: ['reservations', date] })
+        qc.refetchQueries({ queryKey: ['reservations', date] })
+        setLastRefAt(new Date())
+      }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [qc])
+  }, [qc, date])
 
   // Safely formatted date label for UI (avoid crashing on invalid date strings)
   const dateLabel = useMemo(() => {

@@ -90,6 +90,8 @@ export default function AdminPage() {
     sessionStorage.setItem('adminPin', pin)
   }, [pin])
   const [confirmTarget, setConfirmTarget] = useState<any | null>(null)
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editText, setEditText] = useState<string>('')
   const [hiddenDayKey, setHiddenDayKey] = useState<string | null>(null)
   const [isResetting, setIsResetting] = useState<boolean>(false)
   const [isListLoading, setIsListLoading] = useState<boolean>(false)
@@ -364,6 +366,15 @@ export default function AdminPage() {
                     <td className="px-3 py-2 text-right align-top">
                       <button
                         type="button"
+                        className="mr-2 inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onClick={() => {
+                          const names = Array.isArray(r.playerNames) ? r.playerNames : []
+                          setEditTarget(r)
+                          setEditText(names.join('\n'))
+                        }}
+                      >編集</button>
+                      <button
+                        type="button"
                         className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                         disabled={del.isPending}
                         onClick={() => setConfirmTarget(r)}
@@ -423,6 +434,46 @@ export default function AdminPage() {
               >
                 はい
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg">
+            <div className="mb-3 text-lg font-semibold">氏名を編集</div>
+            <div className="mb-2 text-sm text-gray-700">対象: {format(new Date(editTarget.date), 'yyyy-MM-dd')} / {fmt(editTarget.startMin)} - {fmt(editTarget.endMin)} / {dayCourtNames[editTarget.courtId - 1] ?? `Court${editTarget.courtId}`}</div>
+            <label className="mb-1 block text-xs text-gray-600">氏名（1行に1名、人数分）</label>
+            <textarea
+              className="mb-3 h-40 w-full rounded border px-3 py-2 text-sm"
+              value={editText}
+              onChange={(e)=>setEditText(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button type="button" className="flex-1 rounded border px-3 py-2" onClick={()=> setEditTarget(null)}>キャンセル</button>
+              <button
+                type="button"
+                className="flex-1 rounded bg-blue-600 px-3 py-2 text-white"
+                onClick={async ()=>{
+                  try {
+                    if (!pin) { alert('管理PINを入力してください'); return }
+                    const names = editText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)
+                    await axios.put(`/api/admin/update/${editTarget.id}`, { playerNames: names }, { headers: { 'x-admin-pin': pin } })
+                    setEditTarget(null)
+                    // 強制最新化
+                    try { await axios.get(`/api/reservations?date=${format(new Date(editTarget.date),'yyyy-MM-dd')}&_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
+                    await qc.invalidateQueries({ queryKey: ['all-res'] })
+                    await qc.refetchQueries({ queryKey: ['all-res'] })
+                    // 他タブ(予約画面含む)に通知
+                    try { if (typeof window !== 'undefined') localStorage.setItem('resUpdated', String(Date.now())) } catch {}
+                    setLastListRefAt(new Date())
+                  } catch (e:any) {
+                    if (e?.response?.status === 401) alert('管理PINを入力してください')
+                    else alert(e?.response?.data?.error ?? '更新に失敗しました')
+                  }
+                }}
+              >保存</button>
             </div>
           </div>
         </div>
