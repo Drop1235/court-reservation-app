@@ -374,7 +374,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             <div>
               <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
               <ul className="mb-1 ml-4 list-disc space-y-1">
-                <li>予約開始は前日の午後8時からです。</li>
+                <li>3ラウンド目以降の選手は優先的にコートを割り当てました。</li>
+                <li>その他選手の予約開始は午後8時からです。</li>
                 <li>お一人様1枠まで。（終了後は再予約可）</li>
                 <li>
                   以下の場合は削除します：
@@ -388,7 +389,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 </li>
                 <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
                 <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
-                <li>※返答は７：００～２１：００までとします。</li>
+                <li>返答は７：００～２１：００までとします。</li>
               </ul>
             </div>
             <div>
