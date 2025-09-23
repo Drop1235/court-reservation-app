@@ -388,6 +388,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 </li>
                 <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
                 <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
+                <li>※返答は７：００～２１：００までとします。</li>
               </ul>
             </div>
             <div>
