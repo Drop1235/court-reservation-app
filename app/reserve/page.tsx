@@ -374,13 +374,13 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             <div>
               <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
               <ul className="mb-1 ml-4 list-disc space-y-1">
-                <li>3ラウンド目以降の選手は優先的にコートを割り当てました。</li>
-                <li>その他選手の予約開始は午後8時からです。</li>
+                <li className="font-bold text-red-600">第一試合の選手は８：１５～８：４５、第二試合の選手８：４５～９：１５まで試合コートで練習枠が割り当てられています。</li>
+                <li className="font-bold text-red-600">その他の選手は、本アプリより予約してください。</li>
+                <li className="font-bold text-red-600">予約開始は午後8時からです。</li>
                 <li>お一人様1枠まで。（終了後は再予約可）</li>
                 <li>
                   以下の場合は削除します：
                   <ul className="ml-5 list-none space-y-1">
-                    <li>・2枠以上の予約</li>
                     <li>・予約開始時刻より前の予約</li>
                     <li>・名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
                     <li>・大会に出場していない選手の予約</li>
