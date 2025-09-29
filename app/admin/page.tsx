@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [dayNotice, setDayNotice] = useState<string>('')
   const [dayPreparing, setDayPreparing] = useState<boolean>(false)
   const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number; preparing?: boolean } | null>(null)
+  const imgSeqRef = useRef<number>(1)
 
   // Auto-load day config on mount
   useEffect(() => {
@@ -295,13 +296,17 @@ export default function AdminPage() {
                     reader.onload = () => resolve(String(reader.result || ''))
                     reader.readAsDataURL(file)
                   })
-                  // Insert Markdown image at caret
+                  // Insert reference-style Markdown image at caret and append the long data URL at the end as a reference
                   const start = ta.selectionStart || 0
                   const end = ta.selectionEnd || start
                   const before = dayNotice.slice(0, start)
                   const after = dayNotice.slice(end)
-                  const md = `\n![pasted-image](${dataUrl})\n`
-                  const next = before + md + after
+                  const label = `img${imgSeqRef.current++}`
+                  const md = `\n![貼り付け画像][${label}]\n`
+                  // Ensure there is a references section at the end
+                  const needsNewline = dayNotice.length > 0 && !/\n$/.test(dayNotice)
+                  const refBlock = `${needsNewline ? '\n' : ''}[${label}]: ${dataUrl}\n`
+                  const next = before + md + after + refBlock
                   setDayNotice(next)
                   // Restore caret after inserted block
                   requestAnimationFrame(() => {

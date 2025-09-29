@@ -210,8 +210,11 @@ export async function POST(req: Request) {
     if (!courtId || !date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     if (!Array.isArray(playerNames)) return NextResponse.json({ error: 'Player names are required' }, { status: 400 })
     const cleaned = normalizeNames(playerNames)
-    // PIN: 必須・4桁の数字（平文保存）
-    if (typeof pin !== 'string' || !/^\d{4}$/.test(pin)) {
+    // PIN: 必須・4桁の数字（平文保存）。全角→半角へ正規化して検証
+    const normPin = (typeof pin === 'string'
+      ? pin.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
+      : '').replace(/[^0-9]/g, '')
+    if (!/^\d{4}$/.test(normPin)) {
       return NextResponse.json({ error: '暗証番号（4桁の数字）を入力してください。' }, { status: 400 })
     }
     if (cleaned.length !== partySize) {
@@ -318,7 +321,7 @@ export async function POST(req: Request) {
           endMin,
           partySize,
           playerNames: cleaned, // save normalized names
-          pin,
+          pin: normPin,
         } as any,
       })
     }

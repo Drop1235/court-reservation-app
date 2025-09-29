@@ -347,7 +347,7 @@ export default function ReservePage() {
   }
 
 
-const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0 }: any) => {
+const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0, isMobile = false }: any) => {
   // Background color cues by capacity / availability
   const capacityBg = !isAvailable
     ? 'bg-gray-100'
@@ -374,9 +374,16 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             送信中…
           </span>
         )}
-        {names.map((name: string, i: number) => (
-          <div key={i} className="truncate leading-tight">{name}</div>
-        ))}
+        {/* Desktop/Tablet: show list of names */}
+        <div className="hidden sm:block">
+          {names.map((name: string, i: number) => (
+            <div key={i} className="truncate leading-tight">{name}</div>
+          ))}
+        </div>
+        {/* Mobile: single-line overlay showing joined names */}
+        <div className="sm:hidden text-[10px] text-gray-800 truncate pr-6">
+          {Array.isArray(names) ? names.join('・') : ''}
+        </div>
         <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[9px] md:text-[10px] text-gray-600 shadow-sm">{used}/4</span>
       </button>
     </div>
@@ -425,7 +432,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       {!isDayFetching && !isDayRefetching && noticeHtml && (
         <div className="mb-1 relative z-10">
           <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
-            <div className="leading-relaxed [&_img]:rounded pointer-events-auto" dangerouslySetInnerHTML={{ __html: noticeHtml }} />
+            <div className="leading-relaxed [&_img]:rounded pointer-events-auto [&_p]:mb-3 [&_br]:block [&_br]:h-3" dangerouslySetInnerHTML={{ __html: noticeHtml }} />
           </div>
         </div>
       )}
@@ -454,7 +461,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       </div>
 
       <div className="mt-1">
-        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
+        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
           <div
             className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
             style={isMobile ? {
@@ -516,6 +523,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         names={names}
                         isTemp={isTemp}
                         used={used}
+                        isMobile={isMobile}
                       />
                     </div>
                   )
@@ -578,7 +586,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 maxLength={4}
                 placeholder="例: 1234"
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+                onChange={(e) => {
+                  const v = e.target.value
+                    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
+                    .replace(/[^0-9]/g, '')
+                  setPin(v)
+                }}
               />
               <p className="mt-1 text-xs text-gray-500">この番号を知っていれば誰でもこの予約を取消できます。</p>
             </div>
@@ -597,7 +610,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                       alert('人数分の氏名を入力してください')
                       return
                     }
-                    // PIN: 4桁の数字
+                    // PIN: 4桁の数字（全角→半角正規化済み）
                     if (!/^\d{4}$/.test(pin)) {
                       alert('暗証番号（4桁の数字）を入力してください')
                       return

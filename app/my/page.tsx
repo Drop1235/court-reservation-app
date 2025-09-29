@@ -37,8 +37,11 @@ export default function MyPage() {
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      const pin = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
-      if (!pin) throw new Error('取消を中止しました')
+      const raw = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
+      if (!raw) throw new Error('取消を中止しました')
+      const pin = raw
+        .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
+        .replace(/[^0-9]/g, '')
       if (!/^\d{4}$/.test(pin)) throw new Error('4桁の数字を入力してください')
       try {
         return (await axios.delete(`/api/reservations/${id}`, { data: { pin } })).data
