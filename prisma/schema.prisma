@@ -66,6 +66,7 @@ model CourtSetting {
   endMin      Int      @default(1260) // 21:00 (exclusive)
   slotMinutes Int      @default(30)   // 30-minute slots
   preparing   Boolean  @default(false) // true = 準備中（予約UI/APIを停止）
+  notice      String?  // 予約画面に表示するお知らせ（管理画面で編集）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

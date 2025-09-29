@@ -48,6 +48,7 @@ export default function AdminPage() {
   const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
   const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
   const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
+  const [dayNotice, setDayNotice] = useState<string>('')
   const [dayPreparing, setDayPreparing] = useState<boolean>(false)
   const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number; preparing?: boolean } | null>(null)
 
@@ -66,6 +67,7 @@ export default function AdminPage() {
           endMin: d.endMin ?? 21 * 60,
           slotMinutes: d.slotMinutes ?? 30,
           preparing: !!d.preparing,
+          notice: typeof d.notice === 'string' ? d.notice : '',
         }
         lastLoadedRef.current = loaded
         setDayDate(loaded.date)
@@ -75,6 +77,7 @@ export default function AdminPage() {
         setDayStartMin(loaded.startMin)
         setDayEndMin(loaded.endMin)
         setDaySlotMinutes(loaded.slotMinutes)
+        setDayNotice(loaded.notice || '')
         setDayPreparing(!!loaded.preparing)
       } catch {
         // silent; admin can input and save
@@ -168,6 +171,7 @@ export default function AdminPage() {
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
                     preparing: !dayPreparing,
+                    notice: dayNotice,
                   }, { headers: { 'x-admin-pin': pin } })
                   setDayPreparing(p=>!p)
                   // notify others
@@ -268,6 +272,50 @@ export default function AdminPage() {
             <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e)=>setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))} />
           </div>
           <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs text-gray-600">お知らせ（予約画面に表示）</label>
+            <textarea
+              className="h-40 w-full rounded border px-3 py-2 text-sm"
+              placeholder="例：\n※システム不具合時は、大会本部で予約を受け付けます。\n【重要】予約に関するお願い ..."
+              value={dayNotice}
+              onChange={(e)=> setDayNotice(e.target.value)}
+              onPaste={async (e)=>{
+                try {
+                  const ta = e.currentTarget as HTMLTextAreaElement
+                  if (!e.clipboardData) return
+                  const items = Array.from(e.clipboardData.items || [])
+                  const fileItem = items.find(it => it.kind === 'file' && it.type.startsWith('image/'))
+                  if (!fileItem) return
+                  // Prevent the default paste of the image blob
+                  e.preventDefault()
+                  const file = fileItem.getAsFile()
+                  if (!file) return
+                  const dataUrl: string = await new Promise((resolve, reject) => {
+                    const reader = new FileReader()
+                    reader.onerror = () => reject(new Error('failed to read image'))
+                    reader.onload = () => resolve(String(reader.result || ''))
+                    reader.readAsDataURL(file)
+                  })
+                  // Insert Markdown image at caret
+                  const start = ta.selectionStart || 0
+                  const end = ta.selectionEnd || start
+                  const before = dayNotice.slice(0, start)
+                  const after = dayNotice.slice(end)
+                  const md = `\n![pasted-image](${dataUrl})\n`
+                  const next = before + md + after
+                  setDayNotice(next)
+                  // Restore caret after inserted block
+                  requestAnimationFrame(() => {
+                    try {
+                      ta.focus()
+                      const pos = (before + md).length
+                      ta.setSelectionRange(pos, pos)
+                    } catch {}
+                  })
+                } catch {}
+              }}
+            />
+          </div>
+          <div className="sm:col-span-2">
             <button
               type="button"
               className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -294,6 +342,7 @@ export default function AdminPage() {
                     startMin: dayStartMin,
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
+                    notice: dayNotice,
                   }, { headers: { 'x-admin-pin': pin } })
                   alert('当日設定を保存しました')
                   // snapshot last loaded as saved

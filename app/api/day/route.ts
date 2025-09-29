@@ -60,7 +60,7 @@ export async function PUT(req: Request) {
   }
   try {
     const body = await req.json()
-    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing } = body || {}
+    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing, notice } = body || {}
     if (!date || !courtCount || !Array.isArray(courtNames)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
@@ -94,29 +94,39 @@ export async function PUT(req: Request) {
       endMin: eMin,
       slotMinutes: slot,
       preparing: typeof preparing === 'boolean' ? preparing : undefined,
+      notice: typeof notice === 'string' ? notice : undefined,
     }
 
-    const saved = await prisma.courtSetting.upsert({
-      where: { date: data.date },
-      // Use any-cast for preparing until Prisma client is regenerated
-      update: ({
-        courtCount: data.courtCount,
-        courtNames: data.courtNames,
-        startMin: data.startMin,
-        endMin: data.endMin,
-        slotMinutes: data.slotMinutes,
-        ...(typeof data.preparing === 'boolean' ? { preparing: data.preparing } : {}),
-      } as any),
-      create: ({
-        date: data.date,
-        courtCount: data.courtCount,
-        courtNames: data.courtNames,
-        startMin: data.startMin,
-        endMin: data.endMin,
-        slotMinutes: data.slotMinutes,
-        preparing: typeof data.preparing === 'boolean' ? data.preparing : false,
-      } as any),
-    })
+    // Avoid relying on unique(date) in environments where schema may lag
+    const existing = await prisma.courtSetting.findFirst({ where: { date: data.date } })
+    let saved
+    if (existing) {
+      saved = await prisma.courtSetting.update({
+        where: { id: existing.id },
+        data: ({
+          courtCount: data.courtCount,
+          courtNames: data.courtNames,
+          startMin: data.startMin,
+          endMin: data.endMin,
+          slotMinutes: data.slotMinutes,
+          ...(typeof data.preparing === 'boolean' ? { preparing: data.preparing } : {}),
+          ...(typeof data.notice === 'string' ? { notice: data.notice } : {}),
+        } as any),
+      })
+    } else {
+      saved = await prisma.courtSetting.create({
+        data: ({
+          date: data.date,
+          courtCount: data.courtCount,
+          courtNames: data.courtNames,
+          startMin: data.startMin,
+          endMin: data.endMin,
+          slotMinutes: data.slotMinutes,
+          preparing: typeof data.preparing === 'boolean' ? data.preparing : false,
+          notice: typeof data.notice === 'string' ? data.notice : null,
+        } as any),
+      })
+    }
 
     return NextResponse.json(saved)
   } catch (e: any) {

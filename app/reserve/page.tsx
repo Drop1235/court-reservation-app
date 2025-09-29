@@ -5,6 +5,8 @@ import { makeSlots, DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN } f
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { format } from 'date-fns'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const DEFAULT_COURT_COUNT = 4
 const MAX_COURTS = 21
@@ -123,6 +125,26 @@ export default function ReservePage() {
   // removed: localStorage editors (now admin-only)
 
   const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
+
+  // Render admin notice (Markdown -> sanitized HTML)
+  const noticeHtml = useMemo(() => {
+    try {
+      const raw = String((dayCfg as any)?.notice || '')
+      if (!raw.trim()) return ''
+      // 1) Auto-convert image URLs to Markdown images
+      const imgRe = /(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|gif|webp|svg))(?!\))/gi
+      // 2) Auto-convert remaining plain URLs to Markdown links
+      const urlRe = /(https?:\/\/[^\s)]+)(?!\))/gi
+      const preprocessed = raw
+        .replace(imgRe, '![$1]($1)')
+        .replace(urlRe, '[$1]($1)')
+      const parsed = marked.parse(preprocessed) as string
+      // Make links open in new tab and look clickable like buttons
+      const withTargets = parsed
+        .replaceAll('<a ', '<a target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-blue-700 underline underline-offset-2 hover:bg-blue-50 hover:text-blue-800 transition-colors" ')
+      return DOMPurify.sanitize(withTargets)
+    } catch { return '' }
+  }, [dayCfg])
 
   // Pretty colors for court header badges (cycles if courts > color count)
   const courtColors = [
@@ -393,45 +415,41 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
   return (
     <div className="w-full max-w-none overflow-x-hidden space-y-3">
-      {/* Important notice */}
-      <div className="mb-1">
-        <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full">
-          <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
-            <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
-              <ul className="mb-1 ml-4 list-disc space-y-1">
-                <li className="font-bold text-red-600">第一試合の選手は８：１５～８：４５、第二試合の選手８：４５～９：１５まで試合コートで練習枠が割り当てられています。</li>
-                <li className="font-bold text-red-600">その他の選手は、本アプリより予約してください。</li>
-                <li className="font-bold text-red-600">予約開始は午後8時からです。</li>
-                <li>お一人様1枠まで。（終了後は再予約可）</li>
-                <li>
-                  以下の場合は削除します：
-                  <ul className="ml-5 list-none space-y-1">
-                    <li>・予約開始時刻より前の予約</li>
-                    <li>・名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
-                    <li>・大会に出場していない選手の予約</li>
-                    <li>・偽名での予約</li>
+      {/* Important notice (admin-editable) */}
+      <div className="mb-1 relative z-10">
+        <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
+          {noticeHtml ? (
+            <div className="leading-relaxed [&_img]:rounded pointer-events-auto" dangerouslySetInnerHTML={{ __html: noticeHtml }} />
+          ) : (
+            <>
+              <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
+                <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
+                  <ul className="mb-1 ml-4 list-disc space-y-1">
+                    <li className="font-bold text-red-600">第一試合の選手は８：１５～８：４５、第二試合の選手８：４５～９：１５まで試合コートで練習枠が割り当てられています。</li>
+                    <li className="font-bold text-red-600">その他の選手は、本アプリより予約してください。</li>
+                    <li className="font-bold text-red-600">予約開始は午後8時からです。</li>
+                    <li>お一人様1枠まで。（終了後は再予約可）</li>
+                    <li>
+                      以下の場合は削除します：
+                      <ul className="ml-5 list-none space-y-1">
+                        <li>・予約開始時刻より前の予約</li>
+                        <li>・名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
+                        <li>・大会に出場していない選手の予約</li>
+                        <li>・偽名での予約</li>
+                      </ul>
+                    </li>
+                    <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
+                    <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
+                    <li>返答は７：００～２１：００までとします。</li>
                   </ul>
-                </li>
-                <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-                <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
-                <li>返答は７：００～２１：００までとします。</li>
-              </ul>
-            </div>
-            <div>
-              <a
-                href="https://wa.me/message/QNM5DYVOU27GD1"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded border border-green-300 bg-white px-3 py-2 text-sm text-green-700 shadow-sm hover:bg-green-50 hover:underline"
-              >
-                WhatsAppで連絡する
-              </a>
-            </div>
-          </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
