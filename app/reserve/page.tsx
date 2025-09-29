@@ -298,6 +298,12 @@ export default function ReservePage() {
     })
   }, [partySize])
 
+  // 予約取消用の4桁PIN（ユーザー自身で設定）
+  const [pin, setPin] = useState<string>('')
+
+  // Which modal to show for the currently selected slot
+  const [actionMode, setActionMode] = useState<'reserve' | 'choose' | null>(null)
+
   // Helper: names booked for a given slot
   const renderTimeSlot = (start: number, end: number, isTemp = false) => (courtId: number) => {
     const list = currentWithTemps()
@@ -361,6 +367,29 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
   }
 
   if (!mounted) return null
+
+  // Maintenance mode: show preparing screen and block interactions
+  if (dayCfg && (dayCfg as any).preparing === true) {
+    return (
+      <div className="w-full min-h-[60vh] grid place-items-center p-6">
+        <div className="w-full max-w-lg rounded-xl border bg-white shadow p-6 text-center">
+          <div className="text-2xl font-bold mb-2">準備中</div>
+          <p className="text-gray-700 mb-4">現在、管理画面で次の日の予約枠を設定中のため、一時的に予約を停止しています。</p>
+          <p className="text-gray-600 mb-6">しばらくしてから再度アクセスしてください。</p>
+          <div className="flex justify-center gap-2">
+            <button
+              type="button"
+              className="rounded border px-3 py-2 hover:bg-gray-50"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ['day'] })
+                qc.refetchQueries({ queryKey: ['day'] })
+              }}
+            >更新</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-none overflow-x-hidden space-y-3">
@@ -430,7 +459,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       </div>
 
       <div className="mt-1">
-        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full`}>
+        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
           <div
             className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
             style={isMobile ? {
@@ -472,6 +501,19 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                           if (full) return
                           setSelectedCourt(courtId)
                           setSelectedSlot({ start: s, end: e })
+                          // If there is already someone in this slot, first ask the user what to do
+                          try {
+                            const existing = currentWithTemps()
+                              .filter((r: any) => r.__temp !== true)
+                              .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, s) < Math.min(r.endMin, e))
+                            if (existing.length > 0 && used < 4) {
+                              setActionMode('choose')
+                            } else {
+                              setActionMode('reserve')
+                            }
+                          } catch {
+                            setActionMode('reserve')
+                          }
                         }}
                         isSelected={!!selectedSlot && selectedCourt === courtId && selectedSlot.start === s && selectedSlot.end === e}
                         isAvailable={isTimeSlotAvailable(s, e, courtId)}
@@ -489,7 +531,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
         </div>
       </div>
 
-      {selectedSlot && (
+      {selectedSlot && actionMode === 'reserve' && (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-4 sm:place-items-center">
           <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
             <div className="mb-1 text-lg font-semibold">予約 {format(new Date(date), 'yyyy-MM-dd')}</div>
@@ -512,8 +554,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </div>
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium">氏名（人数分・必須）</label>
-              <p className="mb-1 text-sm font-bold text-red-600">漢字フルネームで入力してください。漢字以外の方は本名をそのまま記入してください。</p>
-              <p className="mb-2 text-sm font-bold text-red-600">漢字フルネーム以外は、見つけ次第削除します。</p>
+              <p className="mb-1 text-sm font-bold text-red-600">選手は漢字フルネーム（本名そのまま）、選手以外の練習相手は「コーチ」と入力してください。</p>
+              <p className="mb-2 text-sm font-bold text-red-600">不正予約は、見つけ次第削除します。</p>
               <div className="space-y-2">
                 {Array.from({ length: partySize }).map((_, idx) => (
                   <input
@@ -531,9 +573,23 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                 ))}
               </div>
             </div>
+            <div className="mb-3">
+              <label className="mb-1 block text-sm font-medium">暗証番号（4桁・取消時に必要）</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                type="password"
+                inputMode="numeric"
+                pattern="\\d{4}"
+                maxLength={4}
+                placeholder="例: 1234"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+              />
+              <p className="mt-1 text-xs text-gray-500">この番号を知っていれば誰でもこの予約を取消できます。</p>
+            </div>
             <div className="mb-2">時間: {selectedSlot ? `${fmt(selectedSlot.start)} - ${fmt(selectedSlot.end)}` : ''}</div>
             <div className="flex gap-2">
-              <button className="flex-1 rounded border px-3 py-2" onClick={() => setSelectedSlot(null)}>
+              <button className="flex-1 rounded border px-3 py-2" onClick={() => { setSelectedSlot(null); setPin(''); setActionMode(null) }}>
                 キャンセル
               </button>
               <button
@@ -544,6 +600,11 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     const namesToCheck = playerNames.slice(0, partySize)
                     if (namesToCheck.length !== partySize || namesToCheck.some((n) => !n || n.trim().length === 0)) {
                       alert('人数分の氏名を入力してください')
+                      return
+                    }
+                    // PIN: 4桁の数字
+                    if (!/^\d{4}$/.test(pin)) {
+                      alert('暗証番号（4桁の数字）を入力してください')
                       return
                     }
                     // Front-end rule: コーチは選手1名に対して1名まで
@@ -566,11 +627,14 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         partySize,
                         // 全角/半角スペース・改行などの空白をすべて削除して送信
                         playerNames: playerNames.map((n) => n.replace(/\s+/g, '')), 
+                        pin,
                         clientNowMin: (() => { const now = new Date(); return now.getHours()*60 + now.getMinutes() })(),
                       },
                     })
                     setSelectedSlot(null)
                     setPlayerNames(Array.from({ length: partySize }, () => ''))
+                    setPin('')
+                    setActionMode(null)
                   } catch (e: any) {
                     // onError handler alerts; no duplicate alert here
                   }
@@ -578,6 +642,55 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               >
                 確定
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Choose action modal: reserve remaining or delete an existing reservation */}
+      {selectedSlot && actionMode === 'choose' && (
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-4 sm:place-items-center">
+          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg">
+            <div className="mb-1 text-lg font-semibold">この枠の操作 {format(new Date(date), 'yyyy-MM-dd')}</div>
+            <div className="mb-3 text-sm text-gray-700">コート：{courtNames[selectedCourt-1] ?? `Court${selectedCourt}`}</div>
+            <div className="mb-2 text-sm">時間: {`${fmt(selectedSlot.start)} - ${fmt(selectedSlot.end)}`}</div>
+            <div className="mb-3">
+              <div className="mb-1 text-sm font-medium">現在の予約</div>
+              <ul className="space-y-2">
+                {currentWithTemps()
+                  .filter((r: any) => r.__temp !== true)
+                  .filter((r: any) => r.courtId === selectedCourt && Math.max(r.startMin, selectedSlot.start) < Math.min(r.endMin, selectedSlot.end))
+                  .map((r: any) => (
+                    <li key={r.id} className="flex items-center justify-between rounded border px-3 py-2">
+                      <div className="text-sm truncate">{Array.isArray(r.playerNames) ? r.playerNames.join('・') : ''}（{r.partySize}名）</div>
+                      <button
+                        className="ml-3 rounded border px-2 py-1 text-sm hover:bg-red-50"
+                        onClick={async () => {
+                          try {
+                            const pinInput = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
+                            if (!pinInput) return
+                            if (!/^\d{4}$/.test(pinInput)) { alert('4桁の数字を入力してください'); return }
+                            await axios.delete(`/api/reservations/${r.id}`, { data: { pin: pinInput } })
+                            await qc.invalidateQueries({ queryKey: ['reservations', date] })
+                            await qc.refetchQueries({ queryKey: ['reservations', date] })
+                            setSelectedSlot(null)
+                            setActionMode(null)
+                          } catch (e: any) {
+                            const msg = e?.response?.data?.error || e?.message || '取消に失敗しました'
+                            if (typeof window !== 'undefined') alert(msg)
+                          }
+                        }}
+                      >取消</button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <button className="flex-1 rounded border px-3 py-2" onClick={() => { setSelectedSlot(null); setActionMode(null) }}>閉じる</button>
+              <button
+                className="flex-1 rounded bg-blue-600 px-3 py-2 text-white"
+                onClick={() => setActionMode('reserve')}
+              >残りを予約</button>
             </div>
           </div>
         </div>

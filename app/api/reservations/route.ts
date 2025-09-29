@@ -4,7 +4,6 @@ import { requireUser } from '@/src/lib/auth'
 import { assertServerReservationValidity, overlaps } from '@/src/lib/time'
 import { normalizeNames } from '@/src/lib/text'
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { rateLimitOnce } from '@/src/lib/rate-limit'
 import { captureError, captureErrorWithRequest } from '@/src/lib/sentry'
 
@@ -109,7 +108,11 @@ export async function GET(req: Request) {
       const where: any = { date: { gte: startOfDay, lte: endOfDay } }
       if (courtId) where.courtId = Number(courtId)
       const reservations = await prisma.reservation.findMany({ where })
-      const payload = JSON.stringify(reservations)
+      const safe = reservations.map((r: any) => {
+        const { pin, ...rest } = r as any
+        return rest
+      })
+      const payload = JSON.stringify(safe)
       const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
       // Strictly disable caching everywhere to avoid ghost re-appearing rows after delete
       res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
@@ -120,7 +123,11 @@ export async function GET(req: Request) {
 
     // If no date provided: return all reservations publicly (no auth)
     const reservations = await prisma.reservation.findMany({})
-    const payload = JSON.stringify(reservations)
+    const safe = reservations.map((r: any) => {
+      const { pin, ...rest } = r as any
+      return rest
+    })
+    const payload = JSON.stringify(safe)
     const res = new NextResponse(payload, { headers: { 'Content-Type': 'application/json' } })
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
     res.headers.set('Pragma', 'no-cache')
@@ -134,6 +141,13 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // Maintenance gate: if admin set system to preparing, block creations
+    try {
+      const cfg = await prisma.courtSetting.findFirst({ orderBy: { updatedAt: 'desc' } })
+      if (cfg && (cfg as any).preparing === true) {
+        return NextResponse.json({ error: '現在、準備中のため予約できません。しばらくしてからお試しください。' }, { status: 503 })
+      }
+    } catch {}
     // Idempotency-Key handling (best-effort per instance) — check BEFORE rate limiting
     // So that a duplicate submission with the same key returns cached 200 even within the window
     sweepIdem()
@@ -182,7 +196,7 @@ export async function POST(req: Request) {
       userId = guest!.id
     }
     const body = await req.json()
-    const { courtId, date, startMin, endMin, partySize, playerNames, clientNowMin } = body as {
+    const { courtId, date, startMin, endMin, partySize, playerNames, clientNowMin, pin } = body as {
       courtId: number
       date: string
       startMin: number
@@ -190,11 +204,16 @@ export async function POST(req: Request) {
       partySize: number
       playerNames: string[]
       clientNowMin?: number
+      pin: string
     }
 
     if (!courtId || !date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     if (!Array.isArray(playerNames)) return NextResponse.json({ error: 'Player names are required' }, { status: 400 })
     const cleaned = normalizeNames(playerNames)
+    // PIN: 必須・4桁の数字（平文保存）
+    if (typeof pin !== 'string' || !/^\d{4}$/.test(pin)) {
+      return NextResponse.json({ error: '暗証番号（4桁の数字）を入力してください。' }, { status: 400 })
+    }
     if (cleaned.length !== partySize) {
       return NextResponse.json({ error: '人数分の氏名を入力してください' }, { status: 400 })
     }
@@ -299,6 +318,7 @@ export async function POST(req: Request) {
           endMin,
           partySize,
           playerNames: cleaned, // save normalized names
+          pin,
         } as any,
       })
     }

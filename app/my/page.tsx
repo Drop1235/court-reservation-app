@@ -36,8 +36,21 @@ export default function MyPage() {
   }, [data, tab])
 
   const del = useMutation({
-    mutationFn: async (id: string) => (await axios.delete(`/api/reservations/${id}`)).data,
+    mutationFn: async (id: string) => {
+      const pin = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
+      if (!pin) throw new Error('取消を中止しました')
+      if (!/^\d{4}$/.test(pin)) throw new Error('4桁の数字を入力してください')
+      try {
+        return (await axios.delete(`/api/reservations/${id}`, { data: { pin } })).data
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || '取消に失敗しました'
+        throw new Error(msg)
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-reservations'] }),
+    onError: (err: any) => {
+      if (typeof window !== 'undefined') alert(err?.message || '取消に失敗しました')
+    }
   })
 
   return (

@@ -48,7 +48,8 @@ export default function AdminPage() {
   const [dayStartMin, setDayStartMin] = useState<number>(9 * 60)
   const [dayEndMin, setDayEndMin] = useState<number>(21 * 60)
   const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
-  const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number } | null>(null)
+  const [dayPreparing, setDayPreparing] = useState<boolean>(false)
+  const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number; preparing?: boolean } | null>(null)
 
   // Auto-load day config on mount
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function AdminPage() {
           startMin: d.startMin ?? 9 * 60,
           endMin: d.endMin ?? 21 * 60,
           slotMinutes: d.slotMinutes ?? 30,
+          preparing: !!d.preparing,
         }
         lastLoadedRef.current = loaded
         setDayDate(loaded.date)
@@ -73,6 +75,7 @@ export default function AdminPage() {
         setDayStartMin(loaded.startMin)
         setDayEndMin(loaded.endMin)
         setDaySlotMinutes(loaded.slotMinutes)
+        setDayPreparing(!!loaded.preparing)
       } catch {
         // silent; admin can input and save
       }
@@ -147,6 +150,35 @@ export default function AdminPage() {
         <div className="flex items-center justify-between gap-2 border-b p-3">
           <div className="text-sm font-medium text-gray-700">⚙️ 単日運用：当日設定とリセット</div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 ${dayPreparing ? 'bg-yellow-600 text-white focus:ring-yellow-500' : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200 hover:bg-gray-200'}`}
+              onClick={async ()=>{
+                try {
+                  if (!pin) { alert('管理PINを入力してください'); return }
+                  // Use current states as payload and flip preparing
+                  const nInput = Number(dayCourtCountInput)
+                  const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(21, nInput)) : dayCourtCount
+                  const names = Array.from({ length: finalizedCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  await axios.put('/api/day', {
+                    date: dayDate,
+                    courtCount: finalizedCount,
+                    courtNames: names,
+                    startMin: dayStartMin,
+                    endMin: dayEndMin,
+                    slotMinutes: daySlotMinutes,
+                    preparing: !dayPreparing,
+                  }, { headers: { 'x-admin-pin': pin } })
+                  setDayPreparing(p=>!p)
+                  // notify others
+                  try { await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
+                  try { if (typeof window !== 'undefined') localStorage.setItem('dayCfgUpdated', String(Date.now())) } catch {}
+                } catch (e:any) {
+                  if (e?.response?.status === 401) alert('管理PINを入力してください')
+                  else alert(e?.response?.data?.error ?? '切り替えに失敗しました')
+                }
+              }}
+            >{dayPreparing ? '🛠 準備中を解除' : '🛠 準備中にする'}</button>
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"

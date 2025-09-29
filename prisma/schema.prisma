@@ -35,6 +35,7 @@ model Reservation {
   endMin    Int      // minutes from midnight (5-min increments)
   partySize Int      // 1..4
   playerNames String[] // full names of all participants (length must equal partySize)
+  pin       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -64,6 +65,7 @@ model CourtSetting {
   startMin    Int      @default(540)  // 09:00
   endMin      Int      @default(1260) // 21:00 (exclusive)
   slotMinutes Int      @default(30)   // 30-minute slots
+  preparing   Boolean  @default(false) // true = 準備中（予約UI/APIを停止）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

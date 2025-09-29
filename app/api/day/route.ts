@@ -30,7 +30,7 @@ export async function GET(req: Request) {
         const fallback = String.fromCharCode(65 + i)
         return raw || fallback
       })
-      return { ...cfg, courtCount: count, courtNames: names }
+      return { ...cfg, courtCount: count, courtNames: names, preparing: !!(cfg as any).preparing }
     })()
     const payload = JSON.stringify(safe)
     const etag = 'W/"' + crypto.createHash('sha1').update(payload).digest('hex') + '"'
@@ -60,7 +60,7 @@ export async function PUT(req: Request) {
   }
   try {
     const body = await req.json()
-    const { date, courtCount, courtNames, startMin, endMin, slotMinutes } = body || {}
+    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing } = body || {}
     if (!date || !courtCount || !Array.isArray(courtNames)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
@@ -93,12 +93,29 @@ export async function PUT(req: Request) {
       startMin: sMin,
       endMin: eMin,
       slotMinutes: slot,
+      preparing: typeof preparing === 'boolean' ? preparing : undefined,
     }
 
     const saved = await prisma.courtSetting.upsert({
       where: { date: data.date },
-      update: { courtCount: data.courtCount, courtNames: data.courtNames, startMin: data.startMin, endMin: data.endMin, slotMinutes: data.slotMinutes },
-      create: data,
+      // Use any-cast for preparing until Prisma client is regenerated
+      update: ({
+        courtCount: data.courtCount,
+        courtNames: data.courtNames,
+        startMin: data.startMin,
+        endMin: data.endMin,
+        slotMinutes: data.slotMinutes,
+        ...(typeof data.preparing === 'boolean' ? { preparing: data.preparing } : {}),
+      } as any),
+      create: ({
+        date: data.date,
+        courtCount: data.courtCount,
+        courtNames: data.courtNames,
+        startMin: data.startMin,
+        endMin: data.endMin,
+        slotMinutes: data.slotMinutes,
+        preparing: typeof data.preparing === 'boolean' ? data.preparing : false,
+      } as any),
     })
 
     return NextResponse.json(saved)
