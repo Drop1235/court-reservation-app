@@ -41,7 +41,8 @@ model Reservation {
 
   @@index([courtId, date])
   @@index([userId, date])
-  @@unique([date, courtId, startMin, endMin])
+  // Allow multiple rows in the same slot; capacity is enforced in API
+  @@index([date, courtId, startMin, endMin])
 }
 
 model AuditLog {

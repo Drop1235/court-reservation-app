@@ -277,25 +277,8 @@ export default function ReservePage() {
           created,
         ]
       }
-      // Also trigger a background refetch to reconcile with server state
+      // Trigger a lightweight refetch via react-query; rely on standard query to update
       etagRef.current = null // force next poll to fetch fresh
-      // Guarantee network gets the newest snapshot (bypass CDN/browser cache once)
-      try {
-        const resNow = await axios.get(`/api/reservations?date=${date}&_=${Date.now()}`,
-          { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } })
-        // Merge temps into the fresh payload just in case success of other mutation is still pending
-        const serverFresh = Array.isArray(resNow.data) ? resNow.data.slice() : []
-        // Clean up temps that now appear in server data (use server list, not merged)
-        tempsRef.current = tempsRef.current.filter((t) => !serverFresh.some((r: any) => r.id === t.id))
-        const mergedFresh = serverFresh.slice()
-        for (const t of tempsRef.current) {
-          if (!mergedFresh.some((r: any) => r.id === t.id)) mergedFresh.push(t)
-        }
-        qc.setQueryData(['reservations', date], mergedFresh)
-      } catch {
-        // ignore; periodic refetch will still sync
-      }
-      // Additionally let react-query do a standard refetch for consistency
       await qc.refetchQueries({ queryKey: ['reservations', date] })
       // If temps are cleared, allow poll to slow down
       if (tempsRef.current.length === 0 && !createMutation.isPending) setFastPoll(false)
