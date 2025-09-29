@@ -64,11 +64,15 @@ export default function ReservePage() {
   }, [courtCount])
 
   // Single-day mode: fetch active day config once
-  const { data: dayCfg } = useQuery({
+  const { data: dayCfg, isFetching: isDayFetching, isRefetching: isDayRefetching } = useQuery({
     queryKey: ['day'],
     queryFn: async () => (await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })).data,
     staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+    retry: false,
+    placeholderData: undefined,
   })
   // React to admin saves from other tabs/windows via localStorage broadcast
   useEffect(() => {
@@ -418,42 +422,13 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
   return (
     <div className="w-full max-w-none overflow-x-hidden space-y-3">
       {/* Important notice (admin-editable) */}
-      <div className="mb-1 relative z-10">
-        <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
-          {noticeHtml ? (
+      {!isDayFetching && !isDayRefetching && noticeHtml && (
+        <div className="mb-1 relative z-10">
+          <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
             <div className="leading-relaxed [&_img]:rounded pointer-events-auto" dangerouslySetInnerHTML={{ __html: noticeHtml }} />
-          ) : (
-            <>
-              <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800 shadow-sm">
-                <p className="font-bold">※システム不具合時は、大会本部で予約を受け付けます。</p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="mb-2 font-bold">【重要】予約に関するお願い</p>
-                  <ul className="mb-1 ml-4 list-disc space-y-1">
-                    <li className="font-bold text-red-600">第一試合の選手は８：１５～８：４５、第二試合の選手８：４５～９：１５まで試合コートで練習枠が割り当てられています。</li>
-                    <li className="font-bold text-red-600">その他の選手は、本アプリより予約してください。</li>
-                    <li className="font-bold text-red-600">予約開始は午後8時からです。</li>
-                    <li>お一人様1枠まで。（終了後は再予約可）</li>
-                    <li>
-                      以下の場合は削除します：
-                      <ul className="ml-5 list-none space-y-1">
-                        <li>・予約開始時刻より前の予約</li>
-                        <li>・名前が漢字フルネーム以外の予約（漢字以外の方は本名をそのまま記入でOK）</li>
-                        <li>・大会に出場していない選手の予約</li>
-                        <li>・偽名での予約</li>
-                      </ul>
-                    </li>
-                    <li>選手は漢字フルネーム、選手以外の練習相手は「コーチ」と入力してください。</li>
-                    <li>キャンセル・変更・質問は、以下の「WhatsAppで連絡する」よりご連絡ください。</li>
-                    <li>返答は７：００～２１：００までとします。</li>
-                  </ul>
-                </div>
-              </div>
-            </>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mb-1 flex items-center justify-between gap-3 rounded-lg border bg-white/80 px-2 py-1 backdrop-blur w-full">
         <div className="flex items-center gap-2 min-w-0">
