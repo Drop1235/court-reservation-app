@@ -12,6 +12,8 @@ const DEFAULT_COURT_COUNT = 4
 const MAX_COURTS = 21
 
 export default function ReservePage() {
+  // Treat single line breaks as <br> in Markdown
+  marked.setOptions({ breaks: true })
   const qc = useQueryClient()
   const [date, setDate] = useState<string>('-')
   const [lastRefAt, setLastRefAt] = useState<Date | null>(null)
