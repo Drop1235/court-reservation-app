@@ -192,6 +192,8 @@ export default function ReservePage() {
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
   const tempsRef = useRef<any[]>([])
   const [fastPoll, setFastPoll] = useState(false)
+  // Screenshot target: main grid wrapper
+  const gridRef = useRef<HTMLDivElement | null>(null)
   const { data: reservations, isFetching: isResFetching } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
@@ -353,6 +355,36 @@ export default function ReservePage() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   }
 
+  // --- Screenshot utilities (client-only) ---
+  const loadHtml2Canvas = async (): Promise<any> => {
+    if (typeof window === 'undefined') return null
+    if ((window as any).html2canvas) return (window as any).html2canvas
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script')
+      s.src = 'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+      s.async = true
+      s.onload = () => resolve()
+      s.onerror = () => reject(new Error('failed to load html2canvas'))
+      document.head.appendChild(s)
+    })
+    return (window as any).html2canvas
+  }
+
+  const captureAndDownload = async (el: HTMLElement, filename: string) => {
+    try {
+      const html2canvas = await loadHtml2Canvas()
+      if (!html2canvas) return
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const url = canvas.toDataURL('image/png')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+    } catch {
+      // fail silently; screenshot is a convenience feature for the local user only
+    }
+  }
+
 
 const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0, isMobile = false, isBlocked = false }: any) => {
   // Background color cues by capacity / availability
@@ -471,6 +503,18 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               await qc.invalidateQueries({ queryKey: ['reservations', date] })
               await qc.refetchQueries({ queryKey: ['reservations', date] })
               setLastRefAt(new Date())
+              // After refresh, optionally capture a screenshot of the grid for local download
+              try {
+                if (typeof window !== 'undefined' && localStorage.getItem('captureOnUpdate') === '1') {
+                  const el = gridRef.current
+                  if (el) {
+                    const now = new Date()
+                    const stamp = format(now, 'yyyyMMdd_HHmmss')
+                    const fname = `reserve_${dateLabel}_${stamp}.png`
+                    await captureAndDownload(el, fname)
+                  }
+                }
+              } catch {}
             }}
             aria-busy={isResFetching}
           >{isResFetching ? '更新中…' : '更新'}</button>
@@ -478,7 +522,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       </div>
 
       <div className="mt-1">
-        <div className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
+        <div ref={gridRef} className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
           <div
             className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
             style={isMobile ? {
