@@ -73,3 +73,19 @@ model CourtSetting {
 
   @@unique([date])
 }
+
+// Per-court blackout (予約不可) slots for a given day
+model CourtBlock {
+  id        String   @id @default(cuid())
+  date      DateTime // UTC midnight for the day
+  courtId   Int
+  startMin  Int      // minutes from midnight (5-min increments)
+  endMin    Int      // minutes from midnight (5-min increments)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([date, courtId])
+  @@index([date, courtId, startMin, endMin])
+}

@@ -241,6 +241,15 @@ export async function POST(req: Request) {
     })
     const dbCourtId = ensuredCourt.id
 
+    // Blackout enforcement: deny if this time overlaps any CourtBlock for the day and court
+    try {
+      const blocks = await prisma.courtBlock.findMany({ where: { date: dayStart, courtId: dbCourtId } })
+      const blocked = blocks.some((b: any) => Math.max(b.startMin, startMin) < Math.min(b.endMin, endMin))
+      if (blocked) {
+        return NextResponse.json({ error: 'この時間帯は予約不可です（管理設定）。' }, { status: 400 })
+      }
+    } catch {}
+
     // Rule: お一人様1枠まで（終了後は再予約可）。
     // - 同じ日付で、同一人物（コーチ以外）が「まだ終了していない」予約を持っている場合はブロック
     // - それ以外にも、時間帯が重なる場合は常にブロック

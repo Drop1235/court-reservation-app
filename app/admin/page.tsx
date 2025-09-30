@@ -50,6 +50,28 @@ export default function AdminPage() {
   const [daySlotMinutes, setDaySlotMinutes] = useState<number>(30)
   const [dayNotice, setDayNotice] = useState<string>('')
   const [dayPreparing, setDayPreparing] = useState<boolean>(false)
+  const [dayBlocks, setDayBlocks] = useState<{ courtId: number; startMin: number; endMin: number; reason?: string }[]>([])
+  const noticeRef = useRef<HTMLTextAreaElement | null>(null)
+
+  const applyNoticeFormat = (fn: (sel: string) => string) => {
+    const ta = noticeRef.current
+    if (!ta) return
+    const start = ta.selectionStart || 0
+    const end = ta.selectionEnd || start
+    const before = dayNotice.slice(0, start)
+    const sel = dayNotice.slice(start, end)
+    const after = dayNotice.slice(end)
+    const inserted = fn(sel || '')
+    const next = before + inserted + after
+    setDayNotice(next)
+    requestAnimationFrame(() => {
+      try {
+        ta.focus()
+        const pos = (before + inserted).length
+        ta.setSelectionRange(pos, pos)
+      } catch {}
+    })
+  }
   const lastLoadedRef = useRef<{ date: string; courtCount: number; courtNames: string[]; startMin: number; endMin: number; slotMinutes: number; preparing?: boolean } | null>(null)
   const imgSeqRef = useRef<number>(1)
 
@@ -69,6 +91,7 @@ export default function AdminPage() {
           slotMinutes: d.slotMinutes ?? 30,
           preparing: !!d.preparing,
           notice: typeof d.notice === 'string' ? d.notice : '',
+          blocks: Array.isArray(d.blocks) ? d.blocks.map((b: any) => ({ courtId: Number(b.courtId)||1, startMin: Number(b.startMin)||0, endMin: Number(b.endMin)||0, reason: typeof b.reason==='string'? b.reason: undefined })) : [],
         }
         lastLoadedRef.current = loaded
         setDayDate(loaded.date)
@@ -80,6 +103,7 @@ export default function AdminPage() {
         setDaySlotMinutes(loaded.slotMinutes)
         setDayNotice(loaded.notice || '')
         setDayPreparing(!!loaded.preparing)
+        setDayBlocks(loaded.blocks || [])
       } catch {
         // silent; admin can input and save
       }
@@ -134,9 +158,9 @@ export default function AdminPage() {
   // removed: legacy per-date court setting editor (now replaced by single-day controls)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-3 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
-        <h1 className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-xl font-extrabold text-transparent">管理</h1>
+        <h1 className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-2xl sm:text-3xl font-extrabold text-transparent tracking-tight">管理</h1>
         <div className="flex items-center gap-2">
           <input
             className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -150,20 +174,23 @@ export default function AdminPage() {
       </div>
 
       {/* Single-day controls */}
-      <div className="rounded-lg border bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm font-medium text-gray-700">⚙️ 単日運用：当日設定とリセット</div>
+      <div className="rounded-xl border border-gray-200 bg-white/95 shadow-md backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-sm bg-blue-500" />
+            <span className="sr-only">単日運用：当日設定とリセット</span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 ${dayPreparing ? 'bg-yellow-600 text-white focus:ring-yellow-500' : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200 hover:bg-gray-200'}`}
-              onClick={async ()=>{
+              onClick={async () => {
                 try {
                   if (!pin) { alert('管理PINを入力してください'); return }
                   // Use current states as payload and flip preparing
                   const nInput = Number(dayCourtCountInput)
                   const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(21, nInput)) : dayCourtCount
-                  const names = Array.from({ length: finalizedCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  const names = Array.from({ length: finalizedCount }, (_, i) => dayCourtNames[i] || `Court${i + 1}`)
                   await axios.put('/api/day', {
                     date: dayDate,
                     courtCount: finalizedCount,
@@ -173,12 +200,13 @@ export default function AdminPage() {
                     slotMinutes: daySlotMinutes,
                     preparing: !dayPreparing,
                     notice: dayNotice,
+                    blocks: dayBlocks,
                   }, { headers: { 'x-admin-pin': pin } })
-                  setDayPreparing(p=>!p)
+                  setDayPreparing(p => !p)
                   // notify others
                   try { await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
                   try { if (typeof window !== 'undefined') localStorage.setItem('dayCfgUpdated', String(Date.now())) } catch {}
-                } catch (e:any) {
+                } catch (e: any) {
                   if (e?.response?.status === 401) alert('管理PINを入力してください')
                   else alert(e?.response?.data?.error ?? '切り替えに失敗しました')
                 }
@@ -188,7 +216,7 @@ export default function AdminPage() {
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
               disabled={isResetting}
-              onClick={async ()=>{
+              onClick={async () => {
                 if (!pin) { alert('管理PINを入力してください'); return }
                 if (!confirm('過去（当日を含む）の予約をすべて削除します。よろしいですか？')) return
                 setIsResetting(true)
@@ -223,11 +251,69 @@ export default function AdminPage() {
               {isResetting ? '削除中…' : '🗑️ 過去の全予約を削除'}
             </button>
           </div>
+          <div className="sm:col-span-2">
+            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3 sm:p-4">
+              <div className="mb-2 text-sm font-medium text-gray-700">予約不可（ブラックアウト）設定</div>
+              <div className="mb-2 grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+                <div>
+                  <label className="block text-xs text-gray-600">コート</label>
+                  <select id="blk-court" className="w-full rounded border px-2 py-1 text-sm">
+                    {Array.from({ length: dayCourtCount }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{dayCourtNames[n - 1] || `Court${n}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">開始</label>
+                  <input id="blk-start" className="w-full rounded border px-2 py-1 text-sm" type="time" step={300} defaultValue={`${String(Math.floor(dayStartMin / 60)).padStart(2, '0')}:${String(dayStartMin % 60).padStart(2, '0')}`} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">終了</label>
+                  <input id="blk-end" className="w-full rounded border px-2 py-1 text-sm" type="time" step={300} defaultValue={`${String(Math.floor(dayEndMin / 60)).padStart(2, '0')}:${String(dayEndMin % 60).padStart(2, '0')}`} />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-xs text-gray-600">理由（任意）</label>
+                  <input id="blk-reason" className="w-full rounded border px-2 py-1 text-sm" placeholder="例: メンテ" />
+                </div>
+                <div>
+                  <button type="button" className="w-full rounded bg-gray-900 text-white px-3 py-2 text-sm shadow hover:bg-black/90" onClick={() => {
+                    const court = document.getElementById('blk-court') as HTMLSelectElement
+                    const st = document.getElementById('blk-start') as HTMLInputElement
+                    const en = document.getElementById('blk-end') as HTMLInputElement
+                    const rs = document.getElementById('blk-reason') as HTMLInputElement
+                    if (!court || !st || !en) return
+                    const [sh, sm] = st.value.split(':').map(Number)
+                    const [eh, em] = en.value.split(':').map(Number)
+                    const s = (sh * 60 + sm) | 0
+                    const e = (eh * 60 + em) | 0
+                    if (isNaN(s) || isNaN(e) || s >= e) { alert('開始と終了の指定を見直してください'); return }
+                    if (s < dayStartMin || e > dayEndMin) { alert('予約時間外です'); return }
+                    setDayBlocks(prev => [...prev, { courtId: Number(court.value), startMin: s, endMin: e, reason: rs.value || undefined }])
+                  }}>追加</button>
+                </div>
+              </div>
+              <ul className="space-y-2">
+                {dayBlocks.map((b, idx) => (
+                  <li key={idx} className="flex items-center justify-between rounded-lg border px-2 py-1.5 text-sm bg-white/70">
+                    <div>
+                      <span className="mr-2 inline-block rounded bg-blue-100 px-2 py-0.5 text-blue-800 ring-1 ring-blue-200">{dayCourtNames[b.courtId - 1] || `Court${b.courtId}`}</span>
+                      <span className="mr-2">{String(Math.floor(b.startMin / 60)).padStart(2, '0')}:{String(b.startMin % 60).padStart(2, '0')} - {String(Math.floor(b.endMin / 60)).padStart(2, '0')}:{String(b.endMin % 60).padStart(2, '0')}</span>
+                      {b.reason && <span className="text-gray-500">{b.reason}</span>}
+                    </div>
+                    <button className="rounded px-2 py-1 border hover:bg-red-50" onClick={() => setDayBlocks(prev => prev.filter((_, i) => i !== idx))}>削除</button>
+                  </li>
+                ))}
+                {dayBlocks.length === 0 && (
+                  <li className="text-xs text-gray-500">未設定</li>
+                )}
+              </ul>
+            </div>
+          </div>
         </div>
         <div className="grid gap-3 p-3 sm:grid-cols-2">
           <div className="space-y-2 min-w-0">
             <label className="block text-xs text-gray-600">日付（YYYY-MM-DD）</label>
-            <input className="w-full rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e)=>setDayDate(e.target.value)} />
+            <input className="w-full rounded border px-2 py-1 text-sm" type="date" value={dayDate} onChange={(e) => setDayDate(e.target.value)} />
           </div>
           <div className="space-y-2 min-w-0">
             <label className="block text-xs text-gray-600">コート数（1..21）</label>
@@ -238,19 +324,19 @@ export default function AdminPage() {
               min={1}
               max={21}
               value={dayCourtCountInput}
-              onChange={(e)=>{
+              onChange={(e) => {
                 // allow temporary empty/partial values while typing
                 setDayCourtCountInput(e.target.value)
               }}
-              onBlur={(e)=>{
+              onBlur={(e) => {
                 const n = Number(e.target.value)
                 const v = Number.isFinite(n) ? Math.max(1, Math.min(21, n)) : 1
                 setDayCourtCount(v)
                 setDayCourtCountInput(String(v))
-                setDayCourtNames(prev=>{
-                  const next=[...prev]
-                  if (v>next.length) { while(next.length<v) next.push(String.fromCharCode(65 + next.length)) }
-                  else if (v<next.length) { next.length=v }
+                setDayCourtNames(prev => {
+                  const next = [...prev]
+                  if (v > next.length) { while (next.length < v) next.push(String.fromCharCode(65 + next.length)) }
+                  else if (v < next.length) { next.length = v }
                   return next
                 })
               }}
@@ -259,27 +345,45 @@ export default function AdminPage() {
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs text-gray-600">コート名</label>
             <div className="grid grid-cols-2 gap-2">
-              {Array.from({ length: dayCourtCount }).map((_,i)=> (
-                <input key={i} className="rounded border px-2 py-1 text-sm" value={dayCourtNames[i] || ''} onChange={(e)=>setDayCourtNames(prev=>{ const n=[...prev]; n[i]=e.target.value; return n })} />
+              {Array.from({ length: dayCourtCount }).map((_, i) => (
+                <input key={i} className="rounded border px-2 py-1 text-sm" value={dayCourtNames[i] || ''} onChange={(e) => setDayCourtNames(prev => { const n = [...prev]; n[i] = e.target.value; return n })} />
               ))}
             </div>
           </div>
           <div className="grid grid-cols-3 items-center gap-2 text-sm">
             <label className="text-xs text-gray-600">開始</label>
-            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayStartMin/60)).padStart(2,'0')}:${String(dayStartMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayStartMin(h*60+m) }} />
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayStartMin / 60)).padStart(2, '0')}:${String(dayStartMin % 60).padStart(2, '0')}`} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); setDayStartMin(h * 60 + m) }} />
             <label className="text-xs text-gray-600">終了</label>
-            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayEndMin/60)).padStart(2,'0')}:${String(dayEndMin%60).padStart(2,'0')}`} onChange={(e)=>{ const [h,m]=e.target.value.split(':').map(Number); setDayEndMin(h*60+m) }} />
+            <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayEndMin / 60)).padStart(2, '0')}:${String(dayEndMin % 60).padStart(2, '0')}`} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); setDayEndMin(h * 60 + m) }} />
             <label className="text-xs text-gray-600">枠（分）</label>
-            <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e)=>setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value)||30)))} />
+            <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e) => setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value) || 30)))} />
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs text-gray-600">お知らせ（予約画面に表示）</label>
+            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs overflow-x-auto">
+              <button type="button" className="rounded border px-2 py-1 hover:bg-gray-50" onClick={() => applyNoticeFormat((s) => `[b]${s || '太字'}[/b]`)}>太字</button>
+              <span className="ml-2 text-gray-500">色:</span>
+              {([
+                ['赤', 'red'],
+                ['青', 'blue'],
+                ['緑', 'green'],
+                ['橙', 'orange'],
+                ['灰', 'gray'],
+              ] as const).map(([label, color]) => (
+                <button key={color} type="button" className="rounded border px-2 py-1 hover:bg-gray-50" onClick={() => applyNoticeFormat((s) => `[${color}]${s || label}[/${color}]`)}>{label}</button>
+              ))}
+              <span className="ml-2 text-gray-500">サイズ:</span>
+              {(['sm', 'base', 'lg', 'xl', '2xl'] as const).map(sz => (
+                <button key={sz} type="button" className="rounded border px-2 py-1 hover:bg-gray-50" onClick={() => applyNoticeFormat((s) => `[size=${sz}]${s || sz}[/size]`)}>{sz}</button>
+              ))}
+            </div>
             <textarea
-              className="h-40 w-full rounded border px-3 py-2 text-sm"
+              className="min-h-48 h-48 w-full rounded-lg border px-3 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="例：\n※システム不具合時は、大会本部で予約を受け付けます。\n【重要】予約に関するお願い ..."
               value={dayNotice}
-              onChange={(e)=> setDayNotice(e.target.value)}
-              onPaste={async (e)=>{
+              ref={noticeRef}
+              onChange={(e) => setDayNotice(e.target.value)}
+              onPaste={async (e) => {
                 try {
                   const ta = e.currentTarget as HTMLTextAreaElement
                   if (!e.clipboardData) return
@@ -323,11 +427,11 @@ export default function AdminPage() {
           <div className="sm:col-span-2">
             <button
               type="button"
-              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onClick={async ()=>{
+              className="w-full sm:w-auto rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow ring-1 ring-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={async () => {
                 if (!pin) { alert('管理PINを入力してください'); return }
                 // 軽いバリデーション
-                const aligned = (n:number)=> n%5===0
+                const aligned = (n: number) => n % 5 === 0
                 if (!aligned(dayStartMin) || !aligned(dayEndMin) || !aligned(daySlotMinutes)) { alert('開始・終了・枠（分）は5分単位で入力してください。'); return }
                 if (dayStartMin >= dayEndMin) { alert('開始時刻は終了時刻より前にしてください。'); return }
                 const range = dayEndMin - dayStartMin
@@ -339,7 +443,7 @@ export default function AdminPage() {
                   // Sync local states to the finalized value
                   if (finalizedCount !== dayCourtCount) setDayCourtCount(finalizedCount)
                   if (String(finalizedCount) !== dayCourtCountInput) setDayCourtCountInput(String(finalizedCount))
-                  const names = Array.from({ length: finalizedCount }, (_,i)=> dayCourtNames[i] || `Court${i+1}`)
+                  const names = Array.from({ length: finalizedCount }, (_, i) => dayCourtNames[i] || `Court${i + 1}`)
                   await axios.put('/api/day', {
                     date: dayDate,
                     courtCount: finalizedCount,
@@ -348,6 +452,7 @@ export default function AdminPage() {
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
                     notice: dayNotice,
+                    blocks: dayBlocks,
                   }, { headers: { 'x-admin-pin': pin } })
                   alert('当日設定を保存しました')
                   // snapshot last loaded as saved
@@ -376,9 +481,9 @@ export default function AdminPage() {
       </div>
 
       {/* Reservations list */}
-      <div className="rounded-lg border bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-          <div className="text-sm font-medium text-gray-700">📋 予約一覧</div>
+      <div className="rounded-xl border border-gray-200 bg-white/95 shadow-md backdrop-blur-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3 sm:p-4 bg-gradient-to-r from-slate-50 to-slate-100">
+          <div className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-sm bg-slate-500" />📋 予約一覧</div>
           <div className="flex items-center gap-2">
             <input className="w-56 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" type="search" placeholder="🔎 予約検索（日時・コート・氏名など）" value={q} onChange={(e)=>setQ(e.target.value)} />
             <button

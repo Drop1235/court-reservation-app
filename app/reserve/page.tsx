@@ -137,11 +137,35 @@ export default function ReservePage() {
     try {
       const raw = String((dayCfg as any)?.notice || '')
       if (!raw.trim()) return ''
+      // 0) Lightweight shortcode preprocessing for color/size/weight
+      //    Examples: [red]重要[/red], [blue]info[/blue], [size=lg]大きめ[/size], [b]太字[/b]
+      const colorMap: Record<string,string> = {
+        red: 'text-red-600',
+        blue: 'text-blue-700',
+        green: 'text-green-700',
+        orange: 'text-orange-600',
+        gray: 'text-gray-700',
+      }
+      const sizeMap: Record<string,string> = {
+        sm: 'text-sm',
+        base: 'text-base',
+        lg: 'text-lg',
+        xl: 'text-xl',
+        '2xl': 'text-2xl',
+      }
+      let input = raw
+        // color blocks
+        .replace(/\[(red|blue|green|orange|gray)\]([\s\S]*?)\[\/\1\]/g, (_m, c, t) => `<span class="${colorMap[c]}">${t}</span>`)
+        // size blocks
+        .replace(/\[size=(sm|base|lg|xl|2xl)\]([\s\S]*?)\[\/size\]/g, (_m, s, t) => `<span class="${sizeMap[s]}">${t}</span>`)
+        // bold block (Markdown **text** でも可)
+        .replace(/\[b\]([\s\S]*?)\[\/b\]/g, (_m, t) => `<span class="font-bold">${t}</span>`)
+
       // 1) Auto-convert image URLs to Markdown images
       const imgRe = /(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|gif|webp|svg))(?!\))/gi
       // 2) Auto-convert remaining plain URLs to Markdown links
       const urlRe = /(https?:\/\/[^\s)]+)(?!\))/gi
-      const preprocessed = raw
+      const preprocessed = input
         .replace(imgRe, '![$1]($1)')
         .replace(urlRe, '[$1]($1)')
       const parsed = marked.parse(preprocessed) as string
@@ -330,7 +354,7 @@ export default function ReservePage() {
   }
 
 
-const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0, isMobile = false }: any) => {
+const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0, isMobile = false, isBlocked = false }: any) => {
   // Background color cues by capacity / availability
   const capacityBg = !isAvailable
     ? 'bg-gray-100'
@@ -347,11 +371,16 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="relative h-full">
       <button
         type="button"
-        className={`block h-full w-full text-left p-1 md:p-1 lg:p-1 rounded-md text-[11px] md:text-[10px] ${capacityBg} ${tempStyles} ${isFull || !isAvailable ? 'cursor-not-allowed text-gray-400' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
-        onClick={(isFull || !isAvailable) ? undefined : onClick}
+        className={`block h-full w-full text-left p-1 md:p-1 lg:p-1 rounded-md text-[11px] md:text-[10px] ${capacityBg} ${tempStyles} ${isBlocked ? 'cursor-not-allowed opacity-70' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+        onClick={(e) => { if (isBlocked) return; onClick?.(e) }}
         aria-busy={isTemp}
-        aria-disabled={isFull || !isAvailable}
+        aria-disabled={isBlocked}
       >
+        {isBlocked && (
+          <span className="absolute inset-0 grid place-items-center text-[10px] font-semibold text-red-700/90">
+            予約不可
+          </span>
+        )}
         {isTemp && (
           <span className="absolute -top-1.5 -right-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow">
             送信中…
@@ -379,8 +408,13 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       .flatMap((r: any) => (Array.isArray(r.playerNames) ? r.playerNames : []))
   }
 
+  const blocks: any[] = Array.isArray((dayCfg as any)?.blocks) ? (dayCfg as any).blocks : []
+  const isBlocked = (start: number, end: number, courtId: number) => {
+    return blocks.some((b: any) => b.courtId === courtId && Math.max(Number(b.startMin||0), start) < Math.min(Number(b.endMin||0), end))
+  }
   const isTimeSlotAvailable = (start: number, end: number, courtId: number) => {
     // available if not full
+    if (isBlocked(start, end, courtId)) return false
     return usedCapacity(start, end, courtId) < 4
   }
 
@@ -483,7 +517,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         onClick={() => {
                           // Guard: avoid opening modal when date is not yet valid
                           if (!date || date === '-' || isNaN(Date.parse(date))) return
-                          if (full) return
+                          if (isBlocked(s, e, courtId)) return
                           setSelectedCourt(courtId)
                           setSelectedSlot({ start: s, end: e })
                           // If there is already someone in this slot, first ask the user what to do
@@ -491,7 +525,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                             const existing = currentWithTemps()
                               .filter((r: any) => r.__temp !== true)
                               .filter((r: any) => r.courtId === courtId && Math.max(r.startMin, s) < Math.min(r.endMin, e))
-                            if (existing.length > 0 && used < 4) {
+                            if (existing.length > 0) {
+                              // When full or partially filled, allow user to choose delete
                               setActionMode('choose')
                             } else {
                               setActionMode('reserve')
@@ -507,6 +542,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         isTemp={isTemp}
                         used={used}
                         isMobile={isMobile}
+                        isBlocked={isBlocked(s, e, courtId)}
                       />
                     </div>
                   )
@@ -658,10 +694,13 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         className="ml-3 rounded border px-2 py-1 text-sm hover:bg-red-50"
                         onClick={async () => {
                           try {
-                            const pinInput = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
-                            if (!pinInput) return
-                            if (!/^\d{4}$/.test(pinInput)) { alert('4桁の数字を入力してください'); return }
-                            await axios.delete(`/api/reservations/${r.id}`, { data: { pin: pinInput } })
+                            const raw = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
+                            if (!raw) return
+                            const pinNorm = raw
+                              .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
+                              .replace(/[^0-9]/g, '')
+                            if (!/^\d{4}$/.test(pinNorm)) { alert('4桁の数字を入力してください'); return }
+                            await axios.delete(`/api/reservations/${r.id}`, { data: { pin: pinNorm } })
                             await qc.invalidateQueries({ queryKey: ['reservations', date] })
                             await qc.refetchQueries({ queryKey: ['reservations', date] })
                             setSelectedSlot(null)

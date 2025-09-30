@@ -32,7 +32,14 @@ export async function GET(req: Request) {
       })
       return { ...cfg, courtCount: count, courtNames: names, preparing: !!(cfg as any).preparing }
     })()
-    const payload = JSON.stringify(safe)
+    // Also include blackout blocks for the same date
+    let blocks: any[] = []
+    try {
+      if (safe?.date) {
+        blocks = await prisma.courtBlock.findMany({ where: { date: (safe as any).date }, orderBy: { startMin: 'asc' } })
+      }
+    } catch {}
+    const payload = JSON.stringify(safe ? { ...safe, blocks } : safe)
     const etag = 'W/"' + crypto.createHash('sha1').update(payload).digest('hex') + '"'
     const inm = req.headers.get('if-none-match')
     if (inm && inm === etag) {
@@ -60,7 +67,7 @@ export async function PUT(req: Request) {
   }
   try {
     const body = await req.json()
-    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing, notice } = body || {}
+    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing, notice, blocks } = body || {}
     if (!date || !courtCount || !Array.isArray(courtNames)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
@@ -128,7 +135,34 @@ export async function PUT(req: Request) {
       })
     }
 
-    return NextResponse.json(saved)
+    // Replace blackout blocks for this date if provided
+    if (Array.isArray(blocks)) {
+      // Validate blocks
+      const valid = [] as { courtId: number; startMin: number; endMin: number; reason?: string }[]
+      for (const b of blocks) {
+        const c = Number(b?.courtId)
+        const s = Number(b?.startMin)
+        const e = Number(b?.endMin)
+        if (!Number.isInteger(c) || c < 1 || c > courtCount) continue
+        if (!Number.isInteger(s) || !Number.isInteger(e)) continue
+        if (!isFiveMinuteAligned(s) || !isFiveMinuteAligned(e)) continue
+        if (s >= e) continue
+        if (s < sMin || e > eMin) continue
+        valid.push({ courtId: c, startMin: s, endMin: e, reason: typeof b?.reason === 'string' ? b.reason : undefined })
+      }
+      await prisma.$transaction([
+        prisma.courtBlock.deleteMany({ where: { date: data.date } }),
+        ...(valid.length > 0 ? [prisma.courtBlock.createMany({ data: valid.map(v => ({ ...v, date: data.date })) })] : []),
+      ])
+    }
+
+    // Return merged config with latest blocks
+    try {
+      const latestBlocks = await prisma.courtBlock.findMany({ where: { date: data.date }, orderBy: { startMin: 'asc' } })
+      return NextResponse.json({ ...saved, blocks: latestBlocks })
+    } catch {
+      return NextResponse.json(saved)
+    }
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Failed to update day config' }, { status: 400 })
   }
