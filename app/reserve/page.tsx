@@ -587,12 +587,20 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     placeholder={`氏名 ${idx + 1}`}
                     value={playerNames[idx] ?? ''}
                     onChange={(e) => {
+                      const allowRe = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z]/u
+                      const raw = (e.target.value || '').normalize('NFKC')
+                      // remove spaces (half/full) and invalid chars, then cap to 12
+                      const filtered = Array.from(raw.replace(/\s+/g, ''))
+                        .filter((ch) => allowRe.test(ch))
+                        .join('')
+                        .slice(0, 12)
                       const next = [...playerNames]
-                      next[idx] = e.target.value
+                      next[idx] = filtered
                       setPlayerNames(next)
                     }}
                   />
                 ))}
+                <div className="text-xs text-gray-500">入力ルール: 全角12文字まで。使用できる文字は「漢字・ひらがな・カタカナ・英字」のみ。</div>
               </div>
             </div>
             <div className="mb-3">
@@ -629,6 +637,18 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                       alert('人数分の氏名を入力してください')
                       return
                     }
+                    // Validate name characters and length (serverでも検証)
+                    {
+                      const nameOk = (s: string) => {
+                        const s2 = s.normalize('NFKC').replace(/\s+/g, '')
+                        if (s2.length === 0 || s2.length > 12) return false
+                        return /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z]+$/u.test(s2)
+                      }
+                      if (namesToCheck.some((n) => !nameOk(n))) {
+                        alert('氏名は全角12文字まで。漢字・ひらがな・カタカナ・英字のみ使用できます。')
+                        return
+                      }
+                    }
                     // PIN: 4桁の数字（全角→半角正規化済み）
                     if (!/^\d{4}$/.test(pin)) {
                       alert('暗証番号（4桁の数字）を入力してください')
@@ -652,8 +672,8 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         startMin: selectedSlot.start,
                         endMin: selectedSlot.end,
                         partySize,
-                        // 全角/半角スペース・改行などの空白をすべて削除して送信
-                        playerNames: playerNames.map((n) => n.replace(/\s+/g, '')), 
+                        // 全角/半角スペース・改行などの空白をすべて削除し、12文字に制限
+                        playerNames: playerNames.map((n) => (n || '').normalize('NFKC').replace(/\s+/g, '').slice(0,12)), 
                         pin,
                         clientNowMin: (() => { const now = new Date(); return now.getHours()*60 + now.getMinutes() })(),
                       },

@@ -39,9 +39,16 @@ export async function middleware(req: NextRequest) {
 
   // Allow free access to /reserve and /login regardless of auth
 
+  // Force redirect from /admin to /drop (do not allow using /admin URL)
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    const url = req.nextUrl.clone()
+    url.pathname = pathname.replace(/^\/admin(\/|$)/, '/drop$1') || '/drop'
+    return NextResponse.redirect(url, { status: 308 })
+  }
+
   return res
 }
 
 export const config = {
-  matcher: ['/my/:path*', '/login'],
+  matcher: ['/my/:path*', '/login', '/admin/:path*'],
 }

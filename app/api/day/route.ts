@@ -35,8 +35,10 @@ export async function GET(req: Request) {
     // Also include blackout blocks for the same date
     let blocks: any[] = []
     try {
-      if (safe?.date) {
-        blocks = await prisma.courtBlock.findMany({ where: { date: (safe as any).date }, orderBy: { startMin: 'asc' } })
+      const anyPrisma: any = prisma as any
+      const hasCourtBlock = anyPrisma && anyPrisma.courtBlock && typeof anyPrisma.courtBlock.findMany === 'function'
+      if (hasCourtBlock && safe?.date) {
+        blocks = await anyPrisma.courtBlock.findMany({ where: { date: (safe as any).date }, orderBy: { startMin: 'asc' } })
       }
     } catch {}
     const payload = JSON.stringify(safe ? { ...safe, blocks } : safe)
@@ -150,15 +152,25 @@ export async function PUT(req: Request) {
         if (s < sMin || e > eMin) continue
         valid.push({ courtId: c, startMin: s, endMin: e, reason: typeof b?.reason === 'string' ? b.reason : undefined })
       }
-      await prisma.$transaction([
-        prisma.courtBlock.deleteMany({ where: { date: data.date } }),
-        ...(valid.length > 0 ? [prisma.courtBlock.createMany({ data: valid.map(v => ({ ...v, date: data.date })) })] : []),
-      ])
+      try {
+        const anyPrisma: any = prisma as any
+        const hasCourtBlock = anyPrisma && anyPrisma.courtBlock && typeof anyPrisma.courtBlock.deleteMany === 'function' && typeof anyPrisma.courtBlock.createMany === 'function'
+        if (hasCourtBlock) {
+          await prisma.$transaction([
+            anyPrisma.courtBlock.deleteMany({ where: { date: data.date } }),
+            ...(valid.length > 0 ? [anyPrisma.courtBlock.createMany({ data: valid.map(v => ({ ...v, date: data.date })) })] : []),
+          ])
+        }
+      } catch {}
     }
 
     // Return merged config with latest blocks
     try {
-      const latestBlocks = await prisma.courtBlock.findMany({ where: { date: data.date }, orderBy: { startMin: 'asc' } })
+      const anyPrisma: any = prisma as any
+      const hasCourtBlock = anyPrisma && anyPrisma.courtBlock && typeof anyPrisma.courtBlock.findMany === 'function'
+      const latestBlocks = hasCourtBlock
+        ? await anyPrisma.courtBlock.findMany({ where: { date: data.date }, orderBy: { startMin: 'asc' } })
+        : []
       return NextResponse.json({ ...saved, blocks: latestBlocks })
     } catch {
       return NextResponse.json(saved)
