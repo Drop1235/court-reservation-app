@@ -57,6 +57,9 @@ export default function ReservePage() {
         setTimeColPx(60)
         setColPx(110)
       }
+
+  // Admin PIN gating removed by request; capture is controlled only by localStorage flag 'captureOnUpdate'.
+
     }
     apply()
     window.addEventListener('resize', apply)
@@ -192,8 +195,9 @@ export default function ReservePage() {
   // Keep optimistic temps visible even if a background refetch returns without the new row yet
   const tempsRef = useRef<any[]>([])
   const [fastPoll, setFastPoll] = useState(false)
-  // Screenshot target: main grid wrapper
+  // Screenshot target: main grid wrapper and inner grid
   const gridRef = useRef<HTMLDivElement | null>(null)
+  const gridInnerRef = useRef<HTMLDivElement | null>(null)
   const { data: reservations, isFetching: isResFetching } = useQuery({
     queryKey: ['reservations', date],
     // Add no-cache header so browser/CDN revalidates immediately after a mutation
@@ -370,11 +374,46 @@ export default function ReservePage() {
     return (window as any).html2canvas
   }
 
+  // Inject styles used during capture to neutralize sticky and visual effects
+  const ensureCaptureStyles = () => {
+    if (typeof document === 'undefined') return
+    const id = 'capture-mode-styles'
+    if (document.getElementById(id)) return
+    const style = document.createElement('style')
+    style.id = id
+    style.textContent = `
+      .capture-mode .sticky { position: static !important; top: auto !important; left: auto !important; }
+      .capture-mode .shadow, .capture-mode .shadow-sm, .capture-mode .shadow-md, .capture-mode .shadow-lg { box-shadow: none !important; }
+      .capture-mode .backdrop-blur { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+    `
+    document.head.appendChild(style)
+  }
+
   const captureAndDownload = async (el: HTMLElement, filename: string) => {
     try {
       const html2canvas = await loadHtml2Canvas()
       if (!html2canvas) return
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      ensureCaptureStyles()
+      const container = gridRef.current
+      if (container) {
+        container.scrollTop = 0
+        container.scrollLeft = 0
+        container.classList.add('capture-mode')
+      }
+      const width = (el as HTMLElement).scrollWidth || (el as HTMLElement).clientWidth
+      const height = (el as HTMLElement).scrollHeight || (el as HTMLElement).clientHeight
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        foreignObjectRendering: false,
+        width,
+        height,
+        windowWidth: Math.max(width, window.innerWidth),
+        windowHeight: Math.max(height, window.innerHeight),
+      })
+      if (container) container.classList.remove('capture-mode')
       const url = canvas.toDataURL('image/png')
       const a = document.createElement('a')
       a.href = url
@@ -384,6 +423,7 @@ export default function ReservePage() {
       // fail silently; screenshot is a convenience feature for the local user only
     }
   }
+
 
 
 const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable, isFull, names, isTemp = false, used = 0, isMobile = false, isBlocked = false }: any) => {
@@ -506,7 +546,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               // After refresh, optionally capture a screenshot of the grid for local download
               try {
                 if (typeof window !== 'undefined' && localStorage.getItem('captureOnUpdate') === '1') {
-                  const el = gridRef.current
+                  // wait for re-render to finish (double rAF)
+                  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+                  const el = gridInnerRef.current || gridRef.current
                   if (el) {
                     const now = new Date()
                     const stamp = format(now, 'yyyyMMdd_HHmmss')
@@ -523,7 +565,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
       <div className="mt-1">
         <div ref={gridRef} className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
-          <div
+          <div ref={gridInnerRef}
             className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
             style={isMobile ? {
               gridTemplateColumns: `${timeColPx}px repeat(${courtCount}, minmax(${colMinPx}px, 1fr))`,
