@@ -12,8 +12,8 @@ const DEFAULT_COURT_COUNT = 4
 const MAX_COURTS = 21
 
 export default function ReservePage() {
-  // Treat single line breaks as <br> in Markdown
-  marked.setOptions({ breaks: true })
+  // Treat single line breaks as <br> in Markdown and enable GFM for better link handling
+  marked.setOptions({ breaks: true, gfm: true })
   const qc = useQueryClient()
   const [date, setDate] = useState<string>('-')
   const [lastRefAt, setLastRefAt] = useState<Date | null>(null)
@@ -164,14 +164,8 @@ export default function ReservePage() {
         // bold block (Markdown **text** でも可)
         .replace(/\[b\]([\s\S]*?)\[\/b\]/g, (_m, t) => `<span class="font-bold">${t}</span>`)
 
-      // 1) Auto-convert image URLs to Markdown images
-      const imgRe = /(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|gif|webp|svg))(?!\))/gi
-      // 2) Auto-convert remaining plain URLs to Markdown links
-      const urlRe = /(https?:\/\/[^\s)]+)(?!\))/gi
-      const preprocessed = input
-        .replace(imgRe, '![$1]($1)')
-        .replace(urlRe, '[$1]($1)')
-      let parsed = marked.parse(preprocessed) as string
+      // Keep authoring as-is; rely on Markdown parser (GFM autolink) to convert URLs
+      let parsed = marked.parse(input) as string
       // Make links open in new tab and look clickable like buttons
       let withTargets = parsed
         .replaceAll('<a ', '<a target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-blue-700 underline underline-offset-2 hover:bg-blue-50 hover:text-blue-800 transition-colors" ')
@@ -183,30 +177,58 @@ export default function ReservePage() {
     } catch { return '' }
   }, [dayCfg])
 
+  // Extract first valid URL from potentially malformed markdown link
+  const extractUrl = (text: string): string | null => {
+    // Try to extract URL from markdown link format [text](url)
+    const markdownLinkMatch = text.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i)
+    if (markdownLinkMatch && markdownLinkMatch[2]) {
+      return markdownLinkMatch[2]
+    }
+    // Try to extract plain URL
+    const urlMatch = text.match(/(https?:\/\/[^\s\]\)]+)/i)
+    return urlMatch ? urlMatch[0] : null
+  }
+
   // Delegated click handler: ensure external links open in new tab reliably
   const noticeBoxRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const el = noticeBoxRef.current
     if (!el) return
+
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const anchor = target?.closest?.('a') as HTMLAnchorElement | null
       if (!anchor) return
+
       let href = anchor.getAttribute('href') || ''
-      // Normalize missing scheme
-      if (/^\/?\//.test(href)) href = 'https://' + href.replace(/^\/?\//, '')
-      if (/^(chat\.whatsapp\.com)/i.test(href)) href = 'https://' + href
-      const isExternal = /^https?:\/\//i.test(href) || /^whatsapp:/i.test(href)
-      if (isExternal) {
+      
+      // Extract clean URL from potentially malformed href
+      const cleanUrl = extractUrl(href) || href
+      
+      // Normalize URL
+      let finalUrl = cleanUrl
+      if (/^\/?\//.test(cleanUrl)) {
+        finalUrl = 'https:' + cleanUrl.replace(/^\/?\//, '')
+      } else if (/^(chat\.whatsapp\.com)/i.test(cleanUrl) && !/^https?:\/\//i.test(cleanUrl)) {
+        finalUrl = 'https://' + cleanUrl
+      }
+      
+      // Only process if it looks like a valid URL
+      if (/^https?:\/\//i.test(finalUrl) || /^whatsapp:/i.test(finalUrl)) {
         e.preventDefault()
         e.stopPropagation()
-        const win = window.open(href, '_blank', 'noopener,noreferrer')
+        
+        // Clean up any remaining markdown artifacts
+        const cleanedUrl = finalUrl.split(')')[0].trim()
+        
+        const win = window.open(cleanedUrl, '_blank', 'noopener,noreferrer')
         if (!win) {
           // Fallback when popups are blocked
-          window.location.href = href
+          window.location.href = cleanedUrl
         }
       }
     }
+    
     el.addEventListener('click', onClick)
     return () => el.removeEventListener('click', onClick)
   }, [noticeHtml])
