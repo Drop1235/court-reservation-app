@@ -171,13 +171,45 @@ export default function ReservePage() {
       const preprocessed = input
         .replace(imgRe, '![$1]($1)')
         .replace(urlRe, '[$1]($1)')
-      const parsed = marked.parse(preprocessed) as string
+      let parsed = marked.parse(preprocessed) as string
       // Make links open in new tab and look clickable like buttons
-      const withTargets = parsed
+      let withTargets = parsed
         .replaceAll('<a ', '<a target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-blue-700 underline underline-offset-2 hover:bg-blue-50 hover:text-blue-800 transition-colors" ')
+      // Normalize hrefs missing scheme (e.g., chat.whatsapp.com/...) to https://
+      withTargets = withTargets
+        .replace(/href="\/\/(.*?)"/g, 'href="https://$1"')
+        .replace(/href="(chat\.whatsapp\.com[^"]*)"/g, 'href="https://$1"')
       return DOMPurify.sanitize(withTargets)
     } catch { return '' }
   }, [dayCfg])
+
+  // Delegated click handler: ensure external links open in new tab reliably
+  const noticeBoxRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = noticeBoxRef.current
+    if (!el) return
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const anchor = target?.closest?.('a') as HTMLAnchorElement | null
+      if (!anchor) return
+      let href = anchor.getAttribute('href') || ''
+      // Normalize missing scheme
+      if (/^\/?\//.test(href)) href = 'https://' + href.replace(/^\/?\//, '')
+      if (/^(chat\.whatsapp\.com)/i.test(href)) href = 'https://' + href
+      const isExternal = /^https?:\/\//i.test(href) || /^whatsapp:/i.test(href)
+      if (isExternal) {
+        e.preventDefault()
+        e.stopPropagation()
+        const win = window.open(href, '_blank', 'noopener,noreferrer')
+        if (!win) {
+          // Fallback when popups are blocked
+          window.location.href = href
+        }
+      }
+    }
+    el.addEventListener('click', onClick)
+    return () => el.removeEventListener('click', onClick)
+  }, [noticeHtml])
 
   // Pretty colors for court header badges (cycles if courts > color count)
   const courtColors = [
@@ -520,7 +552,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       {/* Important notice (admin-editable) */}
       {!isDayFetching && !isDayRefetching && noticeHtml && (
         <div className="mb-1 relative z-10">
-          <div className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
+          <div ref={noticeBoxRef} className="rounded-md border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-800 w-full pointer-events-auto">
             <div className="leading-relaxed [&_img]:rounded pointer-events-auto [&_p]:mb-3 [&_br]:block [&_br]:h-3" dangerouslySetInnerHTML={{ __html: noticeHtml }} />
           </div>
         </div>
