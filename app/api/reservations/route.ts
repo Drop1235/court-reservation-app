@@ -210,6 +210,14 @@ export async function POST(req: Request) {
     if (!courtId || !date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     if (!Array.isArray(playerNames)) return NextResponse.json({ error: 'Player names are required' }, { status: 400 })
     const cleaned = normalizeNames(playerNames)
+    // Helper normalizers for name comparison
+    const normBasic = (s: string) => (s || '').normalize('NFKC').replace(/\s+/g, '').trim()
+    const toKatakana = (s: string) => s.replace(/[\u3041-\u3096]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60))
+    const normalizeChoon = (s: string) => s
+      .replace(/[-－―ｰ]/g, 'ー')
+      .replace(/([ァ-ヶ])一([ァ-ヶ])/g, '$1ー$2')
+    const isCoach = (s: string) => normalizeChoon(toKatakana(normBasic(s))) === 'コーチ'
+    const isLooking = (s: string) => normBasic(s).toLowerCase() === 'looking'
     // PIN: 必須・4桁の数字（平文保存）。全角→半角へ正規化して検証
     const normPin = (typeof pin === 'string'
       ? pin.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
@@ -220,13 +228,9 @@ export async function POST(req: Request) {
     if (cleaned.length !== partySize) {
       return NextResponse.json({ error: '人数分の氏名を入力してください' }, { status: 400 })
     }
-    // Rule: コーチは選手1名に対して1名まで
-    {
-      const coachCount = cleaned.filter((n) => n === 'コーチ').length
-      const playerCount = cleaned.length - coachCount
-      if (coachCount > playerCount) {
-        return NextResponse.json({ error: 'コーチは選手1名につき1名までです。氏名の入力を見直してください。' }, { status: 400 })
-      }
+    // Rule update: コーチは入力禁止（表記ゆれ含む）
+    if (cleaned.some((n) => isCoach(n))) {
+      return NextResponse.json({ error: '「コーチ」は入力できません。選手名のみ入力してください。' }, { status: 400 })
     }
     assertServerReservationValidity(startMin, endMin, partySize)
 
@@ -270,12 +274,16 @@ export async function POST(req: Request) {
         where: { date: { gte: dayStartStart, lte: dayStartEnd } },
       })
 
-      // Compare using normalized names; ignore 'コーチ'
-      const cleanedSet = new Set(cleaned.filter((n) => n !== 'コーチ'))
+      // Compare using normalized names; ignore 'コーチ' と 'looking'
+      const cleanedSet = new Set(cleaned.filter((n) => !isCoach(n) && !isLooking(n)).map((n) => normBasic(n)))
       const relevant = existingSameDay.filter((r) => {
         const names = (r as any).playerNames as string[] | undefined
         const norm = normalizeNames(Array.isArray(names) ? names : [])
-        return norm.some((n) => n !== 'コーチ' && cleanedSet.has(n))
+        // ignore 'コーチ' や 'looking' を除外し、basic normalized で比較
+        return norm
+          .filter((n) => !isCoach(n) && !isLooking(n))
+          .map((n) => normBasic(n))
+          .some((n) => cleanedSet.has(n))
       })
 
       let conflict = false

@@ -20,6 +20,8 @@ export default function ReservePage() {
   const [selectedCourt, setSelectedCourt] = useState<number>(1)
   const [partySize, setPartySize] = useState(2)
   const [playerNames, setPlayerNames] = useState<string[]>([''])
+  // IME composition tracking per input index to avoid double characters during Japanese input
+  const [isComposingMap, setIsComposingMap] = useState<Record<number, boolean>>({})
   const [courtCount, setCourtCount] = useState<number>(DEFAULT_COURT_COUNT)
   const [courtNames, setCourtNames] = useState<string[]>(Array.from({ length: DEFAULT_COURT_COUNT }, (_, i) => String.fromCharCode(65 + i)))
   const [startMin, setStartMin] = useState<number>(DEFAULT_START_MIN)
@@ -716,7 +718,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             </div>
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium">氏名（人数分・必須）</label>
-              <p className="mb-1 text-sm font-bold text-red-600">選手は漢字フルネーム（本名そのまま）、選手以外の練習相手は「コーチ」と入力してください。</p>
+              <p className="mb-1 text-sm font-bold text-red-600">選手は漢字フルネーム（本名そのまま）で入力してください。「コーチ」は入力不可です。練習相手名として「looking」は複数入力可です。</p>
               <p className="mb-2 text-sm font-bold text-red-600">不正予約は、見つけ次第削除します。</p>
               <div className="space-y-2">
                 {Array.from({ length: partySize }).map((_, idx) => (
@@ -726,11 +728,44 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     type="text"
                     placeholder={`氏名 ${idx + 1}`}
                     value={playerNames[idx] ?? ''}
+                    onCompositionStart={() => {
+                      setIsComposingMap((m) => ({ ...m, [idx]: true }))
+                    }}
+                    onCompositionEnd={(e) => {
+                      // Allow Kanji, Hiragana, Katakana, Latin letters, and the prolonged sound mark 'ー'
+                      const allowRe = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z\u30FC]/u
+                      const raw = (e.currentTarget.value || '').normalize('NFKC')
+                      // Normalize hyphen-like characters to the standard choonpu 'ー'
+                      const pre = raw.replace(/[-－―ｰ]/g, 'ー')
+                      const filtered = Array.from(pre.replace(/\s+/g, ''))
+                        .filter((ch) => allowRe.test(ch))
+                        .join('')
+                        .slice(0, 12)
+                      setIsComposingMap((m) => ({ ...m, [idx]: false }))
+                      setPlayerNames((prev) => {
+                        const next = [...prev]
+                        next[idx] = filtered
+                        return next
+                      })
+                    }}
                     onChange={(e) => {
-                      const allowRe = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z]/u
+                      const composing = !!isComposingMap[idx]
+                      if (composing) {
+                        // During IME composition, do not sanitize; just mirror raw value
+                        const val = e.target.value
+                        setPlayerNames((prev) => {
+                          const next = [...prev]
+                          next[idx] = val
+                          return next
+                        })
+                        return
+                      }
+                      const allowRe = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z\u30FC]/u
                       const raw = (e.target.value || '').normalize('NFKC')
+                      // Normalize hyphen-like characters to the standard choonpu 'ー'
+                      const pre = raw.replace(/[-－―ｰ]/g, 'ー')
                       // remove spaces (half/full) and invalid chars, then cap to 12
-                      const filtered = Array.from(raw.replace(/\s+/g, ''))
+                      const filtered = Array.from(pre.replace(/\s+/g, ''))
                         .filter((ch) => allowRe.test(ch))
                         .join('')
                         .slice(0, 12)
@@ -740,7 +775,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     }}
                   />
                 ))}
-                <div className="text-xs text-gray-500">入力ルール: 全角12文字まで。使用できる文字は「漢字・ひらがな・カタカナ・英字」のみ。</div>
+                <div className="text-xs text-gray-500">入力ルール: 全角12文字まで。使用できる文字は「漢字・ひらがな・カタカナ・英字・長音（ー）」のみ。</div>
               </div>
             </div>
             <div className="mb-3">
@@ -780,12 +815,16 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                     // Validate name characters and length (serverでも検証)
                     {
                       const nameOk = (s: string) => {
-                        const s2 = s.normalize('NFKC').replace(/\s+/g, '')
+                        // Normalize and allow choonpu 'ー'
+                        const s2 = s
+                          .normalize('NFKC')
+                          .replace(/[\s]+/g, '')
+                          .replace(/[-－―ｰ]/g, 'ー')
                         if (s2.length === 0 || s2.length > 12) return false
-                        return /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z]+$/u.test(s2)
+                        return /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z\u30FC]+$/u.test(s2)
                       }
                       if (namesToCheck.some((n) => !nameOk(n))) {
-                        alert('氏名は全角12文字まで。漢字・ひらがな・カタカナ・英字のみ使用できます。')
+                        alert('氏名は全角12文字まで。漢字・ひらがな・カタカナ・英字・長音「ー」のみ使用できます。')
                         return
                       }
                     }
@@ -794,12 +833,22 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                       alert('暗証番号（4桁の数字）を入力してください')
                       return
                     }
-                    // Front-end rule: コーチは選手1名に対して1名まで
+                    // Front-end rule update:
+                    // - 「コーチ」は1名もNG（表記ゆれを含め禁止）
+                    // - "looking" は複数OK（大文字・全角でも保存時は小文字半角に正規化）
                     {
-                      const coachCount = namesToCheck.filter((n) => n.trim() === 'コーチ').length
-                      const playerCount = namesToCheck.length - coachCount
-                      if (coachCount > playerCount) {
-                        alert('コーチは選手1名につき1名までです。氏名の入力を見直してください。')
+                      const norm = (s: string) => s.normalize('NFKC').replace(/\s+/g, '')
+                      const toKatakana = (s: string) => s.replace(/[\u3041-\u3096]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60))
+                      const normalizeChoon = (s: string) => s
+                        .replace(/[-－―ｰ]/g, 'ー')
+                        .replace(/([ァ-ヶ])一([ァ-ヶ])/g, '$1ー$2')
+                      const isCoach = (s: string) => {
+                        const a = normalizeChoon(toKatakana(norm(s)))
+                        return a === 'コーチ'
+                      }
+                      const hasCoach = namesToCheck.some((n) => isCoach(n))
+                      if (hasCoach) {
+                        alert('「コーチ」は入力できません。選手名のみ入力してください。')
                         return
                       }
                     }
@@ -813,7 +862,12 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         endMin: selectedSlot.end,
                         partySize,
                         // 全角/半角スペース・改行などの空白をすべて削除し、12文字に制限
-                        playerNames: playerNames.map((n) => (n || '').normalize('NFKC').replace(/\s+/g, '').slice(0,12)), 
+                        // "looking" は大文字・全角でも小文字半角 "looking" に正規化
+                        playerNames: playerNames.map((n) => {
+                          const base = (n || '').normalize('NFKC').replace(/\s+/g, '').slice(0,12)
+                          if (base.toLowerCase() === 'looking') return 'looking'
+                          return base
+                        }), 
                         pin,
                         clientNowMin: (() => { const now = new Date(); return now.getHours()*60 + now.getMinutes() })(),
                       },
