@@ -54,10 +54,10 @@ export default function ReservePage() {
         setColMinPx(40)
         setColPx(40)
       } else {
-        // モバイルは広すぎないよう標準値
-        setColMinPx(110)
-        setTimeColPx(60)
-        setColPx(110)
+        // モバイル: 横スクロールなしで3コート程度見えるよう最小幅を小さく
+        setColMinPx(80)
+        setTimeColPx(48)
+        setColPx(80)
       }
 
   // Admin PIN gating removed by request; capture is controlled only by localStorage flag 'captureOnUpdate'.
@@ -520,9 +520,11 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
             <div key={i} className="truncate leading-tight">{name}</div>
           ))}
         </div>
-        {/* Mobile: single-line overlay showing joined names */}
-        <div className="sm:hidden text-[10px] text-gray-800 truncate pr-6">
-          {Array.isArray(names) ? names.join('・') : ''}
+        {/* Mobile: show all names one per line */}
+        <div className="sm:hidden text-[10px] text-gray-800 space-y-0.5 pr-6">
+          {Array.isArray(names) && names.map((name: string, i: number) => (
+            <div key={i} className="leading-tight break-words">{name}</div>
+          ))}
         </div>
         <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[9px] md:text-[10px] text-gray-600 shadow-sm">{used}/4</span>
       </button>
@@ -622,7 +624,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
       <div className="mt-1">
         <div ref={gridRef} className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
           <div ref={gridInnerRef}
-            className={`grid w-full ${isMobile ? 'min-w-max' : ''}`}
+            className={`grid w-full ${isMobile ? 'min-w-0' : ''}`}
             style={isMobile ? {
               gridTemplateColumns: `${timeColPx}px repeat(${courtCount}, minmax(${colMinPx}px, 1fr))`,
             } : {
