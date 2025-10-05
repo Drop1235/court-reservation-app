@@ -904,10 +904,15 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                   .filter((r: any) => r.__temp !== true)
                   .filter((r: any) => r.courtId === selectedCourt && Math.max(r.startMin, selectedSlot.start) < Math.min(r.endMin, selectedSlot.end))
                   .map((r: any) => (
-                    <li key={r.id} className="flex items-center justify-between rounded border px-3 py-2">
-                      <div className="text-sm truncate">{Array.isArray(r.playerNames) ? r.playerNames.join('・') : ''}（{r.partySize}名）</div>
+                    <li key={r.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded border px-3 py-2">
+                      <div className="text-sm text-gray-900 space-y-0.5 break-words">
+                        {Array.isArray(r.playerNames) && r.playerNames.map((name: string, i: number) => (
+                          <div key={i} className="leading-tight">{name}</div>
+                        ))}
+                        <div className="text-xs text-gray-500">（{r.partySize}名）</div>
+                      </div>
                       <button
-                        className="ml-3 rounded border px-2 py-1 text-sm hover:bg-red-50"
+                        className="mt-2 sm:mt-0 sm:ml-3 rounded border px-2 py-1 text-sm hover:bg-red-50"
                         onClick={async () => {
                           try {
                             const raw = typeof window !== 'undefined' ? window.prompt('取消用の暗証番号（4桁）を入力してください') : ''
