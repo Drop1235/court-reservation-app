@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/src/lib/prisma'
 import { DEFAULT_END_MIN, DEFAULT_SLOT_MINUTES, DEFAULT_START_MIN, isFiveMinuteAligned } from '@/src/lib/time'
+import { getExpectedAdminPin } from '@/src/lib/admin'
 
 function toUtcDateOnly(dateStr: string) {
   // Expecting YYYY-MM-DD
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const pin = req.headers.get('x-admin-pin') || ''
-  const expected = process.env.ADMIN_PIN || ''
+  const expected = await getExpectedAdminPin()
   if (!expected || pin !== expected) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

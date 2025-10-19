@@ -89,3 +89,10 @@ model CourtBlock {
   @@index([date, courtId])
   @@index([date, courtId, startMin, endMin])
 }
+
+model AdminConfig {
+  id        String   @id
+  adminPin  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

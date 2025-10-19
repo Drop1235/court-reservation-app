@@ -1,6 +1,7 @@
 export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/src/lib/prisma'
+import { getExpectedAdminPin } from '@/src/lib/admin'
 
 // Find the currently active day (most recently updated CourtSetting)
 async function getActiveDayConfig() {
@@ -14,7 +15,7 @@ async function getActiveDayConfig() {
 
 export async function POST(req: Request) {
   const pin = req.headers.get('x-admin-pin') || ''
-  const expected = process.env.ADMIN_PIN || ''
+  const expected = await getExpectedAdminPin()
   if (!expected || pin !== expected) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

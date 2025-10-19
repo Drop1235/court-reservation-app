@@ -10,6 +10,19 @@ async function main() {
   await prisma.user.upsert({ where: { email: 'admin@example.com' }, create: { email: 'admin@example.com', role: 'ADMIN' }, update: {} })
   await prisma.user.upsert({ where: { email: 'user@example.com' }, create: { email: 'user@example.com', role: 'USER' }, update: {} })
 
+  // Admin PIN (persisted); fall back to env or default
+  try {
+    const anyPrisma: any = prisma as any
+    if (anyPrisma && anyPrisma.adminConfig && typeof anyPrisma.adminConfig.upsert === 'function') {
+      const initPin = process.env.ADMIN_PIN || '0000'
+      await anyPrisma.adminConfig.upsert({
+        where: { id: 'singleton' },
+        update: { adminPin: initPin },
+        create: { id: 'singleton', adminPin: initPin },
+      })
+    }
+  } catch {}
+
   console.log('Seed completed')
 }
 

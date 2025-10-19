@@ -2,11 +2,12 @@ export const runtime = 'nodejs'
 import { prisma } from '@/src/lib/prisma'
 import { NextResponse } from 'next/server'
 import { normalizeNames } from '@/src/lib/text'
+import { getExpectedAdminPin } from '@/src/lib/admin'
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const pin = req.headers.get('x-admin-pin') || ''
-    const expected = process.env.ADMIN_PIN || ''
+    const expected = await getExpectedAdminPin()
     if (!expected || pin !== expected) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

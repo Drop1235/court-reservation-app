@@ -31,6 +31,7 @@ export default function AdminPage() {
   })
   const [q, setQ] = useState('')
   const [pin, setPin] = useState('')
+  const [newPin, setNewPin] = useState('')
   const [lastListRefAt, setLastListRefAt] = useState<Date | null>(null)
   const [settingDate, setSettingDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   // removed: past bulk delete cutoff
@@ -169,6 +170,30 @@ export default function AdminPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
           />
+          <input
+            className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            type="password"
+            placeholder="新しいPIN"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value)}
+          />
+          <button
+            type="button"
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={async () => {
+              try {
+                if (!pin) { alert('現在の管理PINを入力してください'); return }
+                if (!newPin || newPin.trim().length < 4) { alert('新しいPINを4文字以上で入力してください'); return }
+                await axios.post('/api/admin/change-pin', { newPin: newPin.trim() }, { headers: { 'x-admin-pin': pin } })
+                setPin(newPin.trim())
+                setNewPin('')
+                alert('管理PINを変更しました')
+              } catch (e: any) {
+                if (e?.response?.status === 401) alert('現在の管理PINが正しくありません')
+                else alert(e?.response?.data?.error ?? '管理PINの変更に失敗しました')
+              }
+            }}
+          >PIN変更</button>
           <div className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">{Array.isArray(visibleData) ? visibleData.length : 0} 件</div>
         </div>
       </div>
