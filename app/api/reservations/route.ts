@@ -229,7 +229,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '人数分の氏名を入力してください' }, { status: 400 })
     }
     // Rule update: コーチは入力禁止（表記ゆれ含む）
-    if (cleaned.some((n) => isCoach(n))) {
+    if (false && cleaned.some((n) => isCoach(n))) {
       return NextResponse.json({ error: '「コーチ」は入力できません。選手名のみ入力してください。' }, { status: 400 })
     }
     assertServerReservationValidity(startMin, endMin, partySize)

@@ -849,7 +849,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
                         return a === 'コーチ'
                       }
                       const hasCoach = namesToCheck.some((n) => isCoach(n))
-                      if (hasCoach) {
+                      if (false && hasCoach) {
                         alert('「コーチ」は入力できません。選手名のみ入力してください。')
                         return
                       }
