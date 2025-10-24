@@ -158,6 +158,17 @@ export default function AdminPage() {
     return base.filter((r: any) => dateKeyUTC(r.date) !== hiddenDayKey)
   }, [data, hiddenDayKey])
 
+  // Preparing 実効判定（openAt を超えたら自動解除扱い）
+  const dayPreparingEffective = useMemo(() => {
+    try {
+      if (dayPreparing !== true) return false
+      if (!dayOpenAt) return true
+      const d = new Date(dayOpenAt)
+      if (isNaN(d.getTime())) return true
+      return new Date() < d
+    } catch { return dayPreparing === true }
+  }, [dayPreparing, dayOpenAt])
+
   const del = useMutation({
     mutationFn: async (id: string) => (await axios.delete(`/api/admin/force-delete/${id}`, { headers: { 'x-admin-pin': pin } })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['all-res'] }),
@@ -225,7 +236,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 ${dayPreparing ? 'bg-yellow-600 text-white focus:ring-yellow-500' : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200 hover:bg-gray-200'}`}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 ${dayPreparingEffective ? 'bg-yellow-600 text-white focus:ring-yellow-500' : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200 hover:bg-gray-200'}`}
               onClick={async () => {
                 try {
                   if (!pin) { alert('管理PINを入力してください'); return }
@@ -233,6 +244,7 @@ export default function AdminPage() {
                   const nInput = Number(dayCourtCountInput)
                   const finalizedCount = Number.isFinite(nInput) ? Math.max(1, Math.min(21, nInput)) : dayCourtCount
                   const names = Array.from({ length: finalizedCount }, (_, i) => dayCourtNames[i] || `Court${i + 1}`)
+                  const nextPreparing = !dayPreparingEffective
                   await axios.put('/api/day', {
                     date: dayDate,
                     courtCount: finalizedCount,
@@ -240,12 +252,14 @@ export default function AdminPage() {
                     startMin: dayStartMin,
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
-                    preparing: !dayPreparing,
+                    preparing: nextPreparing,
                     notice: dayNotice,
-                    openAt: dayOpenAt ? new Date(dayOpenAt).toISOString() : null,
+                    // 手動で準備中に戻す場合は openAt をクリア
+                    openAt: nextPreparing ? null : (dayOpenAt ? new Date(dayOpenAt).toISOString() : null),
                     blocks: dayBlocks,
                   }, { headers: { 'x-admin-pin': pin } })
-                  setDayPreparing(p => !p)
+                  setDayPreparing(nextPreparing)
+                  if (nextPreparing) setDayOpenAt('')
                   // notify others
                   try { await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' } }) } catch {}
                   try { if (typeof window !== 'undefined') localStorage.setItem('dayCfgUpdated', String(Date.now())) } catch {}
@@ -254,7 +268,7 @@ export default function AdminPage() {
                   else alert(e?.response?.data?.error ?? '切り替えに失敗しました')
                 }
               }}
-            >{dayPreparing ? '🛠 準備中を解除' : '🛠 準備中にする'}</button>
+            >{dayPreparingEffective ? '🛠 準備中を解除' : '🛠 準備中にする'}</button>
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
