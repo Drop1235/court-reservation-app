@@ -548,16 +548,29 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     return usedCapacity(start, end, courtId) < 4
   }
 
+  // Maintenance mode: show preparing screen and block interactions
+  const isPreparingEffective = useMemo(() => {
+    try {
+      if (!dayCfg) return false
+      const p = (dayCfg as any).preparing === true
+      if (!p) return false
+      const openAtRaw = (dayCfg as any).openAt as any
+      if (!openAtRaw) return true
+      const openAt = new Date(openAtRaw)
+      if (isNaN(openAt.getTime())) return true
+      return new Date() < openAt
+    } catch { return (dayCfg as any)?.preparing === true }
+  }, [dayCfg])
+
+  // client-only render guard must be placed after hooks to keep hook order stable
   if (!mounted) return null
 
-  // Maintenance mode: show preparing screen and block interactions
-  if (dayCfg && (dayCfg as any).preparing === true) {
+  if (dayCfg && isPreparingEffective) {
     return (
       <div className="w-full min-h-[60vh] grid place-items-center p-6">
         <div className="w-full max-w-lg rounded-xl border bg-white shadow p-6 text-center">
           <div className="text-2xl font-bold mb-2">準備中</div>
-          <p className="text-gray-700 mb-4">現在、管理画面で次の日の予約枠を設定中のため、一時的に予約を停止しています。</p>
-          <p className="text-gray-600 mb-6">しばらくしてから再度アクセスしてください。</p>
+          <p className="text-gray-700 mb-6">準備中です。予約開始までしばらくお待ちください。</p>
           <div className="flex justify-center gap-2">
             <button
               type="button"

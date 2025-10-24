@@ -9,6 +9,15 @@ function toUtcDateOnly(dateStr: string) {
   return new Date(dateStr + 'T00:00:00.000Z')
 }
 
+function parseIsoOrNull(v: any): Date | null {
+  try {
+    if (!v) return null
+    const s = String(v)
+    const d = new Date(s)
+    return isNaN(d.getTime()) ? null : d
+  } catch { return null }
+}
+
 // Helper: get the most recently updated CourtSetting as the active-day config
 async function getActiveDayConfig() {
   try {
@@ -22,6 +31,18 @@ async function getActiveDayConfig() {
 export async function GET(req: Request) {
   try {
     const cfg = await getActiveDayConfig()
+    // Auto-clear preparing if openAt has passed
+    if (cfg && (cfg as any).preparing === true && (cfg as any).openAt) {
+      try {
+        const now = new Date()
+        const openAt = new Date((cfg as any).openAt as any)
+        if (!isNaN(openAt.getTime()) && now >= openAt) {
+          // persist change to DB
+          const updated = await prisma.courtSetting.update({ where: { id: (cfg as any).id }, data: { preparing: false } })
+          ;(cfg as any).preparing = updated.preparing
+        }
+      } catch {}
+    }
     // Normalize for length/empties only; allow arbitrary characters the admin entered
     const safe = (() => {
       if (!cfg) return cfg
@@ -70,7 +91,7 @@ export async function PUT(req: Request) {
   }
   try {
     const body = await req.json()
-    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing, notice, blocks } = body || {}
+    const { date, courtCount, courtNames, startMin, endMin, slotMinutes, preparing, notice, blocks, openAt } = body || {}
     if (!date || !courtCount || !Array.isArray(courtNames)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
@@ -105,6 +126,7 @@ export async function PUT(req: Request) {
       slotMinutes: slot,
       preparing: typeof preparing === 'boolean' ? preparing : undefined,
       notice: typeof notice === 'string' ? notice : undefined,
+      openAt: parseIsoOrNull(openAt) || null,
     }
 
     // Avoid relying on unique(date) in environments where schema may lag
@@ -121,6 +143,7 @@ export async function PUT(req: Request) {
           slotMinutes: data.slotMinutes,
           ...(typeof data.preparing === 'boolean' ? { preparing: data.preparing } : {}),
           ...(typeof data.notice === 'string' ? { notice: data.notice } : {}),
+          ...(data.openAt !== undefined ? { openAt: data.openAt } : {}),
         } as any),
       })
     } else {
@@ -134,6 +157,7 @@ export async function PUT(req: Request) {
           slotMinutes: data.slotMinutes,
           preparing: typeof data.preparing === 'boolean' ? data.preparing : false,
           notice: typeof data.notice === 'string' ? data.notice : null,
+          openAt: data.openAt ?? null,
         } as any),
       })
     }

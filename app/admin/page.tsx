@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [dayNotice, setDayNotice] = useState<string>('')
   const [dayPreparing, setDayPreparing] = useState<boolean>(false)
   const [dayBlocks, setDayBlocks] = useState<{ courtId: number; startMin: number; endMin: number; reason?: string }[]>([])
+  const [dayOpenAt, setDayOpenAt] = useState<string>('') // local datetime-local string
   const noticeRef = useRef<HTMLTextAreaElement | null>(null)
 
   const applyNoticeFormat = (fn: (sel: string) => string) => {
@@ -93,6 +94,7 @@ export default function AdminPage() {
           preparing: !!d.preparing,
           notice: typeof d.notice === 'string' ? d.notice : '',
           blocks: Array.isArray(d.blocks) ? d.blocks.map((b: any) => ({ courtId: Number(b.courtId)||1, startMin: Number(b.startMin)||0, endMin: Number(b.endMin)||0, reason: typeof b.reason==='string'? b.reason: undefined })) : [],
+          openAt: d.openAt ? String(d.openAt) : null,
         }
         lastLoadedRef.current = loaded
         setDayDate(loaded.date)
@@ -105,6 +107,21 @@ export default function AdminPage() {
         setDayNotice(loaded.notice || '')
         setDayPreparing(!!loaded.preparing)
         setDayBlocks(loaded.blocks || [])
+        // Convert ISO -> datetime-local (local timezone)
+        try {
+          if (loaded.openAt) {
+            const d0 = new Date(loaded.openAt)
+            if (!isNaN(d0.getTime())) {
+              const pad = (n: number) => String(n).padStart(2, '0')
+              const s = `${d0.getFullYear()}-${pad(d0.getMonth()+1)}-${pad(d0.getDate())}T${pad(d0.getHours())}:${pad(d0.getMinutes())}`
+              setDayOpenAt(s)
+            } else {
+              setDayOpenAt('')
+            }
+          } else {
+            setDayOpenAt('')
+          }
+        } catch { setDayOpenAt('') }
       } catch {
         // silent; admin can input and save
       }
@@ -225,6 +242,7 @@ export default function AdminPage() {
                     slotMinutes: daySlotMinutes,
                     preparing: !dayPreparing,
                     notice: dayNotice,
+                    openAt: dayOpenAt ? new Date(dayOpenAt).toISOString() : null,
                     blocks: dayBlocks,
                   }, { headers: { 'x-admin-pin': pin } })
                   setDayPreparing(p => !p)
@@ -382,6 +400,8 @@ export default function AdminPage() {
             <input className="col-span-2 rounded border px-2 py-1" type="time" step={300} value={`${String(Math.floor(dayEndMin / 60)).padStart(2, '0')}:${String(dayEndMin % 60).padStart(2, '0')}`} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); setDayEndMin(h * 60 + m) }} />
             <label className="text-xs text-gray-600">枠（分）</label>
             <input className="col-span-2 rounded border px-2 py-1" type="number" min={5} step={5} value={daySlotMinutes} onChange={(e) => setDaySlotMinutes(Math.max(5, Math.min(240, Number(e.target.value) || 30)))} />
+            <label className="text-xs text-gray-600">予約開始日時</label>
+            <input className="col-span-2 rounded border px-2 py-1" type="datetime-local" value={dayOpenAt} onChange={(e) => setDayOpenAt(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs text-gray-600">お知らせ（予約画面に表示）</label>
@@ -477,6 +497,7 @@ export default function AdminPage() {
                     endMin: dayEndMin,
                     slotMinutes: daySlotMinutes,
                     notice: dayNotice,
+                    openAt: dayOpenAt ? new Date(dayOpenAt).toISOString() : null,
                     blocks: dayBlocks,
                   }, { headers: { 'x-admin-pin': pin } })
                   alert('当日設定を保存しました')

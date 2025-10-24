@@ -145,7 +145,13 @@ export async function POST(req: Request) {
     try {
       const cfg = await prisma.courtSetting.findFirst({ orderBy: { updatedAt: 'desc' } })
       if (cfg && (cfg as any).preparing === true) {
-        return NextResponse.json({ error: '現在、準備中のため予約できません。しばらくしてからお試しください。' }, { status: 503 })
+        const now = new Date()
+        const openAtRaw = (cfg as any).openAt as any
+        const openAt = openAtRaw ? new Date(openAtRaw) : null
+        const isOpened = openAt && !isNaN(openAt.getTime()) ? now >= openAt : false
+        if (!isOpened) {
+          return NextResponse.json({ error: '現在、準備中のため予約できません。しばらくしてからお試しください。' }, { status: 503 })
+        }
       }
     } catch {}
     // Idempotency-Key handling (best-effort per instance) — check BEFORE rate limiting
