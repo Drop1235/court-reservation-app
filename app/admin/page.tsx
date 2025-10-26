@@ -55,6 +55,15 @@ export default function AdminPage() {
   const [dayOpenAt, setDayOpenAt] = useState<string>('') // local datetime-local string
   const noticeRef = useRef<HTMLTextAreaElement | null>(null)
 
+  const fmtYmdJST = (d: any): string => {
+    try {
+      const s = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d))
+      const t = s.replace(/\//g, '-')
+      const [yy, mm, dd] = t.split('-')
+      return `${yy}-${mm}-${dd}`
+    } catch { return '' }
+  }
+
   const applyNoticeFormat = (fn: (sel: string) => string) => {
     const ta = noticeRef.current
     if (!ta) return
@@ -85,7 +94,7 @@ export default function AdminPage() {
         const d = res.data
         if (!d) return
         const loaded = {
-          date: format(new Date(d.date), 'yyyy-MM-dd'),
+          date: fmtYmdJST(d.date) || format(new Date(d.date), 'yyyy-MM-dd'),
           courtCount: Math.max(1, Math.min(21, d.courtCount || 4)),
           courtNames: Array.from({ length: Math.max(1, Math.min(21, d.courtCount || 4)) }, (_, i) => (d.courtNames?.[i]) || `Court${i + 1}`),
           startMin: d.startMin ?? 9 * 60,

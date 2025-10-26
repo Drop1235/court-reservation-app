@@ -33,6 +33,15 @@ export default function ReservePage() {
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [colPx, setColPx] = useState<number>(120)
 
+  const fmtYmdJST = (d: any): string => {
+    try {
+      const s = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d))
+      const t = s.replace(/\//g, '-')
+      const [yy, mm, dd] = t.split('-')
+      return `${yy}-${mm}-${dd}`
+    } catch { return '' }
+  }
+
   // client-only render guard to avoid hydration mismatch
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -100,20 +109,13 @@ export default function ReservePage() {
   }, [qc, date])
 
   // Safely formatted date label for UI (avoid crashing on invalid date strings)
-  const dateLabel = useMemo(() => {
-    try {
-      if (!date || date === '-' || isNaN(Date.parse(date))) return date || '-'
-      return format(new Date(date), 'yyyy-MM-dd')
-    } catch {
-      return date || '-'
-    }
-  }, [date])
+  const dateLabel = useMemo(() => date || '-', [date])
 
   useEffect(() => {
     if (!dayCfg) return
     try {
-      const dstr = format(new Date(dayCfg.date), 'yyyy-MM-dd')
-      setDate(dstr)
+      const dstr = fmtYmdJST((dayCfg as any).date)
+      setDate(dstr || '-')
       const cnt = Math.min(Math.max(dayCfg.courtCount ?? DEFAULT_COURT_COUNT, 1), MAX_COURTS)
       setCourtCount(cnt)
       const names = Array.isArray(dayCfg.courtNames) ? dayCfg.courtNames.slice(0, cnt) : []
