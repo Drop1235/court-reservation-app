@@ -80,7 +80,7 @@ export default function ReservePage() {
   // Single-day mode: fetch active day config once
   const { data: dayCfg, isFetching: isDayFetching, isRefetching: isDayRefetching } = useQuery({
     queryKey: ['day'],
-    queryFn: async () => (await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })).data,
+    queryFn: async () => (await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })).data,
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: true,
