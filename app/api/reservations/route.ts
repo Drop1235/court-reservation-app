@@ -224,6 +224,8 @@ export async function POST(req: Request) {
       .replace(/([ァ-ヶ])一([ァ-ヶ])/g, '$1ー$2')
     const isCoach = (s: string) => normalizeChoon(toKatakana(normBasic(s))) === 'コーチ'
     const isLooking = (s: string) => normBasic(s).toLowerCase() === 'looking'
+    // HP は重複予約許可の特例（同名チェックから除外）
+    const isHP = (s: string) => normBasic(s).toLowerCase() === 'hp'
     // PIN: 必須・4桁の数字（平文保存）。全角→半角へ正規化して検証
     const normPin = (typeof pin === 'string'
       ? pin.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))
@@ -281,13 +283,13 @@ export async function POST(req: Request) {
       })
 
       // Compare using normalized names; ignore 'コーチ' と 'looking'
-      const cleanedSet = new Set(cleaned.filter((n) => !isCoach(n) && !isLooking(n)).map((n) => normBasic(n)))
+      const cleanedSet = new Set(cleaned.filter((n) => !isCoach(n) && !isLooking(n) && !isHP(n)).map((n) => normBasic(n)))
       const relevant = existingSameDay.filter((r) => {
         const names = (r as any).playerNames as string[] | undefined
         const norm = normalizeNames(Array.isArray(names) ? names : [])
         // ignore 'コーチ' や 'looking' を除外し、basic normalized で比較
         return norm
-          .filter((n) => !isCoach(n) && !isLooking(n))
+          .filter((n) => !isCoach(n) && !isLooking(n) && !isHP(n))
           .map((n) => normBasic(n))
           .some((n) => cleanedSet.has(n))
       })
