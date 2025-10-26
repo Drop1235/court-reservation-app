@@ -90,7 +90,7 @@ export default function AdminPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get('/api/day', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
+        const res = await axios.get(`/api/day?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
         const d = res.data
         if (!d) return
         const loaded = {

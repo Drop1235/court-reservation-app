@@ -32,6 +32,8 @@ export default function ReservePage() {
   const [timeColPx, setTimeColPx] = useState<number>(64)
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [colPx, setColPx] = useState<number>(120)
+  // Render guard for day configuration to avoid flashing default 09:00 grid
+  const [dayReady, setDayReady] = useState<boolean>(false)
 
   const fmtYmdJST = (d: any): string => {
     try {
@@ -112,7 +114,7 @@ export default function ReservePage() {
   const dateLabel = useMemo(() => date || '-', [date])
 
   useEffect(() => {
-    if (!dayCfg) return
+    if (!dayCfg) { setDayReady(false); return }
     try {
       const dstr = fmtYmdJST((dayCfg as any).date)
       setDate(dstr || '-')
@@ -127,7 +129,8 @@ export default function ReservePage() {
       setStartMin(typeof dayCfg.startMin === 'number' ? dayCfg.startMin : DEFAULT_START_MIN)
       setEndMin(typeof dayCfg.endMin === 'number' ? dayCfg.endMin : DEFAULT_END_MIN)
       setSlotMinutes(typeof dayCfg.slotMinutes === 'number' ? dayCfg.slotMinutes : DEFAULT_SLOT_MINUTES)
-    } catch {}
+      setDayReady(true)
+    } catch { setDayReady(true) }
   }, [dayCfg])
 
   // keep selectedCourt in range
@@ -137,7 +140,7 @@ export default function ReservePage() {
 
   // removed: localStorage editors (now admin-only)
 
-  const slots = useMemo(() => makeSlots(startMin, endMin, slotMinutes), [startMin, endMin, slotMinutes])
+  const slots = useMemo(() => dayReady ? makeSlots(startMin, endMin, slotMinutes) : [], [dayReady, startMin, endMin, slotMinutes])
 
   // Render admin notice (Markdown -> sanitized HTML)
   const noticeHtml = useMemo(() => {
@@ -638,6 +641,9 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
 
       <div className="mt-1">
         <div ref={gridRef} className={`overflow-auto rounded-xl border bg-white shadow-md w-full max-h-[70vh] sm:max-h-[75vh] md:max-h-[78vh] lg:max-h-[80vh] overscroll-contain`}>
+          {!dayReady ? (
+            <div className="p-6 text-center text-sm text-gray-500">読み込み中…</div>
+          ) : (
           <div ref={gridInnerRef}
             className={`grid w-full ${isMobile ? 'min-w-0' : ''}`}
             style={isMobile ? {
@@ -709,6 +715,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
               </Fragment>
             ))}
           </div>
+          )}
         </div>
       </div>
 
