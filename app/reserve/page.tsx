@@ -446,6 +446,25 @@ export default function ReservePage() {
       .capture-mode .sticky { position: static !important; top: auto !important; left: auto !important; }
       .capture-mode .shadow, .capture-mode .shadow-sm, .capture-mode .shadow-md, .capture-mode .shadow-lg { box-shadow: none !important; }
       .capture-mode .backdrop-blur { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+      /* During capture, make cell text larger and significantly increase line-height/bottom padding
+         so that characters are never vertically clipped in exported PNG */
+      .capture-mode .reservation-cell-btn {
+        font-size: 14px !important;
+        line-height: 1.7 !important;
+        padding-top: 4px !important;
+        padding-bottom: 12px !important;
+      }
+      .capture-mode .reservation-cell-btn .leading-snug,
+      .capture-mode .reservation-cell-btn .leading-tight,
+      .capture-mode .reservation-cell-btn .break-words {
+        line-height: 1.7 !important;
+      }
+      /* Slight vertical compress on name lines during capture to avoid per-glyph bottom clipping */
+      .capture-mode .capture-name-line {
+        transform: scaleY(0.9);
+        transform-origin: center top;
+        display: inline-block;
+      }
     `
     document.head.appendChild(style)
   }
@@ -461,14 +480,34 @@ export default function ReservePage() {
         container.scrollLeft = 0
         container.classList.add('capture-mode')
       }
-      const canvas = await html2canvas(el, {
-        scale: typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 2,
+      const extraBottom = 16
+      const targetHeightRaw = (el as HTMLElement).scrollHeight || (el as HTMLElement).clientHeight
+      const captureHeight = targetHeightRaw + extraBottom
+      const baseCanvas = await html2canvas(el, {
+        // Render at higher resolution with a bit of extra height at the bottom
+        scale: 2,
+        backgroundColor: '#ffffff',
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff',
         foreignObjectRendering: false,
+        height: captureHeight,
+        windowHeight: captureHeight,
       })
       if (container) container.classList.remove('capture-mode')
+
+      // Downscale to 50% so the final PNG size is similar to on-screen view
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const targetWidth = Math.round(baseCanvas.width / 2)
+      const targetHeight = Math.round(baseCanvas.height / 2)
+      canvas.width = targetWidth
+      canvas.height = targetHeight
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(baseCanvas, 0, 0, targetWidth, targetHeight)
+      }
+
       const url = canvas.toDataURL('image/png')
       const a = document.createElement('a')
       a.href = url
@@ -498,7 +537,7 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
     <div className="relative h-full">
       <button
         type="button"
-        className={`block h-full w-full text-left p-1 md:p-1 lg:p-1 rounded-md text-[11px] md:text-[10px] ${capacityBg} ${tempStyles} ${isBlocked ? 'cursor-not-allowed opacity-70' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+        className={`reservation-cell-btn block h-full w-full text-left p-1 md:p-1 lg:p-1 rounded-md text-[11px] md:text-[10px] ${capacityBg} ${tempStyles} ${isBlocked ? 'cursor-not-allowed opacity-70' : 'hover:bg-blue-50 transition-colors'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
         onClick={(e) => { if (isBlocked) return; onClick?.(e) }}
         aria-busy={isTemp}
         aria-disabled={isBlocked}
@@ -514,15 +553,15 @@ const ReservationCell = ({ courtId, start, end, onClick, isSelected, isAvailable
           </span>
         )}
         {/* Desktop/Tablet: show list of names */}
-        <div className="hidden sm:block">
+        <div className="hidden sm:block pb-0.5">
           {names.map((name: string, i: number) => (
-            <div key={i} className="truncate leading-tight">{name}</div>
+            <div key={i} className="truncate leading-snug capture-name-line">{name}</div>
           ))}
         </div>
         {/* Mobile: show all names one per line */}
-        <div className="sm:hidden text-[10px] text-gray-800 space-y-0.5 pr-6">
+        <div className="sm:hidden text-[10px] text-gray-800 space-y-0.5 pr-6 pb-0.5">
           {Array.isArray(names) && names.map((name: string, i: number) => (
-            <div key={i} className="leading-tight break-words">{name}</div>
+            <div key={i} className="leading-snug break-words capture-name-line">{name}</div>
           ))}
         </div>
         <span className="absolute bottom-1 right-1 rounded bg-white/70 px-1 text-[9px] md:text-[10px] text-gray-600 shadow-sm">{used}/4</span>
