@@ -461,18 +461,12 @@ export default function ReservePage() {
         container.scrollLeft = 0
         container.classList.add('capture-mode')
       }
-      const width = (el as HTMLElement).scrollWidth || (el as HTMLElement).clientWidth
-      const height = (el as HTMLElement).scrollHeight || (el as HTMLElement).clientHeight
       const canvas = await html2canvas(el, {
-        scale: 2,
+        scale: typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         foreignObjectRendering: false,
-        width,
-        height,
-        windowWidth: Math.max(width, window.innerWidth),
-        windowHeight: Math.max(height, window.innerHeight),
       })
       if (container) container.classList.remove('capture-mode')
       const url = canvas.toDataURL('image/png')
